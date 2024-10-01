@@ -4,7 +4,7 @@ Tags: Plugin Compatibility Checker, Plugin, Management, Version, checker, compat
 Requires at least: 4.0
 Tested up to: 6.6
 Requires PHP: 5.6
-Stable tag: 3.0.2
+Stable tag: 4.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,6 +19,10 @@ A Plugin Compatibility Checker is vital for WordPress users to ensure seamless u
 * **Plugin Version Comparison** - Instantly compare your installed plugin versions with the latest releases, ensuring you're up-to-date and compatible with the latest WordPress version.
 * **Update Status Indicator** - Quickly identify which plugins are ready for update and which ones require attention before proceeding with WordPress updates.
 * **User-Friendly Interface** - Navigate and utilize the plugin's functionalities effortlessly, making the compatibility checking process a breeze.
+
+### ✨ New Features ###
+
+* **Multisite** - Plugin Supports Multisite.
 
 
 ### ✨ List of ALL Features ###
