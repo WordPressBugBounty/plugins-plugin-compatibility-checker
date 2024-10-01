@@ -2,9 +2,9 @@
 Contributors: Dinesh Pilani
 Tags: Plugin Compatibility Checker, Plugin, Management, Version, checker, compatibility, php, PHP Compatibility Checker
 Requires at least: 4.0
-Tested up to: 6.4
+Tested up to: 6.6
 Requires PHP: 5.6
-Stable tag: 3.0.1
+Stable tag: 3.0.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 

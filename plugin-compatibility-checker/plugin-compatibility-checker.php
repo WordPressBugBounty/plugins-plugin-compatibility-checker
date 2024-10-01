@@ -2,7 +2,7 @@
 /**
 * Plugin Name: Plugin Compatibility Checker
 * Description: Check Your Plugin are compatibale uptop which version of WordPress, before preforming WordPress Update
-* Version: 3.0.1
+* Version: 3.0.2
 * Author: Dinesh Pilani
 * Author URI: https://www.linkedin.com/in/dineshpilani/
 **/
