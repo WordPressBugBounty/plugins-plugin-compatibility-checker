@@ -2,7 +2,7 @@
 /**
 * Plugin Name: Plugin Compatibility Checker
 * Description: Check Your Plugin are compatibale uptop which version of WordPress, before preforming WordPress Update
-* Version: 4.0
+* Version: 4.0.1
 * Author: Dinesh Pilani
 * Author URI: https://www.linkedin.com/in/dineshpilani/
 **/
@@ -18,7 +18,8 @@ Class PCC{
     
     if (is_multisite()) {
       add_action("network_admin_menu", array($this,"PCC_Menu_Pages_multisite"));
-         register_activation_hook(__FILE__, 'hw_check_network_activation');   
+      register_activation_hook(__FILE__,array($this,'hw_check_network_activation'));
+ 
       // Hook the activation check
 
     } else {

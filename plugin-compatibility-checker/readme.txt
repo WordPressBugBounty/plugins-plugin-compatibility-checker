@@ -1,7 +1,7 @@
 === Plugin Compatibility Checker ===
 Contributors: Dinesh Pilani
 Tags: Plugin Compatibility Checker, Plugin, Management, Version, checker, compatibility, php, PHP Compatibility Checker
-Requires at least: 4.0
+Requires at least: 4.0.1
 Tested up to: 6.6
 Requires PHP: 5.6
 Stable tag: 4.0
