@@ -1,3 +1,80 @@
+.table .thead-dark th {
+    background-color: #32373c;
+    color: #ffffff;
+    text-align: left;
+    padding: 12px 15px;
+    font-weight: bold;
+}
+
+.tbdy {
+    font-size: 14px;
+    color: #fff;
+}
+
+td {
+    border-radius: 4px;
+    padding: 5px;
+    text-align: center;
+
+}
+.pluginheading{
+    font-size: 1.9rem;
+    margin-bottom: 20px;
+}
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+  
+  }
+  
+  .stats-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  
+  .stats-heading {
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+  
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+  }
+  
+  .stat-card {
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    transition: transform 0.3s ease;
+  }
+  
+  .stat-card:hover {
+    transform: scale(1.05);
+  }
+  
+  .stat-icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+    color: #0073aa;
+  }
+  
+  .stat-content h3 {
+    font-size: 18px;
+    margin: 0;
+  }
+  
+  .stat-content p {
+    font-size: 24px;
+    color: #333;
+    margin: 5px 0 0;
+  }
+
 h1 {
     text-align: center;
     margin: 20px;
@@ -76,7 +153,9 @@ max-width: inherit !important;
 
 
 #exportButton {
-    background-color: #4CAF50;
+    margin: 1px;
+     margin-left: auto !important;
+    background-color: #2271b1;
     border: none;
     color: white;
     padding: 10px 20px;
@@ -84,14 +163,13 @@ max-width: inherit !important;
     text-decoration: none;
     display: inline-block;
     font-size: 16px;
-    margin: 4px 2px;
     transition-duration: 0.4s;
     cursor: pointer;
     border-radius: 8px;
 }
 
 #exportButton:hover {
-    background-color: #45a049;
+    background-color: #135e96;
 }
 
 table.sysinfo {
@@ -107,4 +185,15 @@ table.sysinfo {
     font-size: 16px;
     font-weight: 500;
     text-align: center;
+}
+
+.filter {
+    margin-right: 10px !important;
+    float: left;
+    margin-top: 10px;
+}
+
+
+.fltr {
+    margin-right: 20px !important;
 }

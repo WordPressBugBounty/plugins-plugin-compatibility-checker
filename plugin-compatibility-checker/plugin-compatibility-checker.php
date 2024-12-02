@@ -2,7 +2,7 @@
 /**
 * Plugin Name: Plugin Compatibility Checker
 * Description: Check Your Plugin are compatibale uptop which version of WordPress, before preforming WordPress Update
-* Version: 4.0.1
+* Version: 4.0.2
 * Author: Dinesh Pilani
 * Author URI: https://www.linkedin.com/in/dineshpilani/
 **/
@@ -208,26 +208,71 @@ public static function PCC_Check_Multisite()
         $obj = json_decode($json);
         $upgrade = $obj->offers[0];
         $StableVersion=$upgrade->version;
+        $plugin = get_plugins(); 
+ $Total_plugin =count($plugin);
  
-        echo '<b>Your Current WordPress Version Running is : '.$CurrentWPVersion.'</b><br>';
-		echo '<b>Your Current PHP Version is : '.$CurrentPhpVersion.'</b><br>';
+     //   echo '<b>Your Current WordPress Version Running is : '.$CurrentWPVersion.'</b><br>';
+//		echo '<b>Your Current PHP Version is : '..'</b><br>';
 	
-        if($CurrentWPVersion == $StableVersion)
+	
+			echo '
+	
+	<div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon">📄</div>
+      <div class="stat-content">
+        <h3>WordPress</h3>
+        <p>'.$CurrentWPVersion.'</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">⚙️</div>
+      <div class="stat-content">
+        <h3>PHP</h3>
+        <p>'.$CurrentPhpVersion.'</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🔌</div>
+      <div class="stat-content">
+        <h3>Plugins Installed</h3>
+        <p>'.$Total_plugin.'</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">✔️</div>
+      <div class="stat-content">
+        <h3>Plugins Active</h3>
+        <p>  <span id="pluginCount"><span id="pluginCountValue"></span></span>
+</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">❌</div>
+      <div class="stat-content">
+        <h3>Plugins Inactive</h3>
+             <p>  <span id="pluginCountinactive"><span id="pluginCountValueinactive"></span></span>
+      </div>
+    </div>
+  </div>
+
+
+	';
+	
+	
+	
+	
+            if($CurrentWPVersion == $StableVersion)
 		{
-			echo '<b>You Are Already Having The Lastest Version of WordPress. </b><br><br>';
+			echo '<br><b>You Are Already Having The Lastest Version of WordPress. </b><br><br>';
      	}
 		else
 		{
-		echo '<b>The Lastest Stable Version Of WordPress is Available is : '.$StableVersion.'</b><br><br>';
+		echo '<br><b>The Lastest Stable Version Of WordPress is Available is : '.$StableVersion.'</b><br><br>';
       
         }
 		
-        // Include StyleSheet and Initilize Table
-        echo '<b>Filter By Plugin Status</b> <select class="form-control fltr" data-role="select-dropdown" id="plgstatus">
-<option value="all">Plugin Status </option>
-<option value="Activated">Activated	</option>
-<option value="Deactivated">Deactivated</option>
-</select>';
+     
         echo '<div class="table-responsive table-hover"><table class="table table-bordered" id="pcctable">
         <thead class="thead-dark">
         <tr>
@@ -244,7 +289,7 @@ public static function PCC_Check_Multisite()
         </thead>';
  
        // Get all plugins
-$plugin = get_plugins(); 
+//$plugin = get_plugins(); 
 
 // Get the list of network active plugins
 $network_active_plugins = get_site_option('active_sitewide_plugins', array());
@@ -252,21 +297,25 @@ $network_active_plugins = get_site_option('active_sitewide_plugins', array());
 // Initialize counters for active and inactive plugins
 $Number_Of_plugin_activate_flag = 0;
 $Number_Of_plugin_deactivate_flag = 0;
- $Total_plugin =count($plugin);
 
 
 
 
 
 
-        
+
 echo '
 <div class="tnip">
-    <b>Total Number of Installed Plugin: '.$Total_plugin.' </b>
+<b class="filter">Filter By Plugin Status</b> <select class="form-control fltr" data-role="select-dropdown" id="plgstatus">
+<option value="all">Plugin Status </option>
+<option value="Activated">Activated	</option>
+<option value="Deactivated">Deactivated</option>
+</select>
     <button id="exportButton">Export to CSV</button>
 </div>
 ';
-		  $loop = 0;
+
+$loop = 0;
 		   $storearray=array();
          foreach($plugin as $plug)
             {
@@ -431,11 +480,11 @@ foreach ($plugin as $plugin_file => $plugin_info) {
           
       if($PluginCurrentVersion == $PluginLastestVerion)
       {
-            $trowcolor='green';
+            $trowcolor='#135e96';
      }
       else
       {
-        $trowcolor='red';
+        $trowcolor='#f64855';
         
 
       }
@@ -476,15 +525,15 @@ foreach ($plugin as $plugin_file => $plugin_info) {
 	
 	  
     
-    if($PluginName == 'Plugin Compatibility Checker')
-    {
-          $Pluginurlwithslugforversions = "https://wptide.org/api/v1/audit/wporg/plugin/plugin-compatibility-checker/3.0.1?reports=all";
+   // if($PluginName == 'Plugin Compatibility Checker')
+    //{
+      //    $Pluginurlwithslugforversions = "https://wptide.org/api/v1/audit/wporg/plugin/plugin-compatibility-checker/3.0.1?reports=all";
         
-    }
-      else
-      {
+    //}
+     // else
+     // {
       $Pluginurlwithslugforversions = "https://wptide.org/api/v1/audit/wporg/plugin/$PluginSlug/$PluginLastestVerion?reports=all"; 
-      }
+     // }
     
     
     
@@ -577,8 +626,26 @@ foreach ($compatibleVersions as $index => $value) {
   
 
     
-echo '<b>Total Number of Activate Plugin '.': '.$Number_Of_plugin_activate_flag.'</b>'. '<br>';
-echo '<b>Total Number of Deactivate Plugin '.': '.$Number_Of_plugin_deactivate_flag .'</b>'. '<br>';
+
+          ?> <script>
+  // Passing the PHP value to JavaScript
+  var Number_Of_plugin_activate_flag = 
+  <?php echo $Number_Of_plugin_activate_flag; ?>;
+  
+  // Setting the value in the HTML
+  document.getElementById("pluginCountValue").textContent = Number_Of_plugin_activate_flag;
+  
+  
+   // Passing the PHP value to JavaScript
+  var Number_Of_plugin_deactivate_flag = 
+  <?php echo $Number_Of_plugin_deactivate_flag; ?>;
+  
+  // Setting the value in the HTML
+  document.getElementById("pluginCountValueinactive").textContent = Number_Of_plugin_deactivate_flag;
+</script>
+    <?php
+         
+         
          
     
 echo '<br><br><b>Note:- The Plugin which are showing No Data that are not found on wordpress org as they may be Custom Plugin or licenced Plugin so please check it with the Author or from the website you have buyed, that is there lastest version avaibale for the plugin.<b><br><br><b>After Analysis Of Above Plugin Please Update the WordPress Accordingly.</b>';
@@ -649,7 +716,7 @@ public static function PCC_Check()
 	
 	
 	
-		echo '<h1>Check Your Plugin Compatibility</h1>';
+		echo '<h1 class="pluginheading">Check Your Plugin Compatibility</h1>';
         // Get Current Version of Running WordPress
         $CurrentWPVersion= get_bloginfo( 'version' );
         $CurrentPhpVersion=  phpversion();
@@ -672,26 +739,69 @@ public static function PCC_Check()
         $obj = json_decode($json);
         $upgrade = $obj->offers[0];
         $StableVersion=$upgrade->version;
- 
-        echo '<b>Your Current WordPress Version Running is : '.$CurrentWPVersion.'</b><br>';
-		echo '<b>Your Current PHP Version is : '.$CurrentPhpVersion.'</b><br>';
+    $plugin = get_plugins(); 
+ $Total_plugin =count($plugin);
+       // echo '<b>Your Current WordPress Version Running is : '.$CurrentWPVersion.'</b><br>';
+	//	echo '<b>Your Current PHP Version is : '.$CurrentPhpVersion.'</b><br>';
+	
+		echo '
+	
+	<div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon">📄</div>
+      <div class="stat-content">
+        <h3>WordPress</h3>
+        <p>'.$CurrentWPVersion.'</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">⚙️</div>
+      <div class="stat-content">
+        <h3>PHP</h3>
+        <p>'.$CurrentPhpVersion.'</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🔌</div>
+      <div class="stat-content">
+        <h3>Plugins Installed</h3>
+        <p>'.$Total_plugin.'</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">✔️</div>
+      <div class="stat-content">
+        <h3>Plugins Active</h3>
+        <p>  <span id="pluginCount"><span id="pluginCountValue"></span></span>
+</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">❌</div>
+      <div class="stat-content">
+        <h3>Plugins Inactive</h3>
+             <p>  <span id="pluginCountinactive"><span id="pluginCountValueinactive"></span></span>
+      </div>
+    </div>
+  </div>
+
+
+	';
+	
+	
 	
         if($CurrentWPVersion == $StableVersion)
 		{
-			echo '<b>You Are Already Having The Lastest Version of WordPress. </b><br><br>';
+			echo '<br><b>You Are Already Having The Lastest Version of WordPress. </b><br><br>';
      	}
 		else
 		{
-		echo '<b>The Lastest Stable Version Of WordPress is Available is : '.$StableVersion.'</b><br><br>';
+		echo '<br><b>The Lastest Stable Version Of WordPress is Available is : '.$StableVersion.'</b><br><br>';
       
         }
 		
         // Include StyleSheet and Initilize Table
-        echo '<b>Filter By Plugin Status</b> <select class="form-control fltr" data-role="select-dropdown" id="plgstatus">
-<option value="all">Plugin Status </option>
-<option value="Activated">Activated	</option>
-<option value="Deactivated">Deactivated</option>
-</select>';
+        //echo '';
         echo '<div class="table-responsive table-hover"><table class="table table-bordered" id="pcctable">
         <thead class="thead-dark">
         <tr>
@@ -708,15 +818,19 @@ public static function PCC_Check()
         </thead>';
  
         
-         $plugin=get_plugins();
+        // $plugin=get_plugins();
          $getpluginstatus=get_option('active_plugins');
-         $Total_plugin =count($plugin);
+      //   $Total_plugin =count($plugin);
         $Number_Of_plugin_activate_flag= 0;
         $Number_Of_plugin_deactivate_flag= 0;
         
 echo '
 <div class="tnip">
-    <b>Total Number of Installed Plugin: '.$Total_plugin.' </b>
+<b class="filter">Filter By Plugin Status</b> <select class="form-control fltr" data-role="select-dropdown" id="plgstatus">
+<option value="all">Plugin Status </option>
+<option value="Activated">Activated	</option>
+<option value="Deactivated">Deactivated</option>
+</select>
     <button id="exportButton">Export to CSV</button>
 </div>
 ';
@@ -855,11 +969,11 @@ if(!isset($TestuptoVersion) || $TestuptoVersion == '')
           
       if($PluginCurrentVersion == $PluginLastestVerion)
       {
-            $trowcolor='green';
+            $trowcolor='#135e96';
      }
       else
       {
-        $trowcolor='red';
+        $trowcolor='#f64855';
         
 
       }
@@ -989,11 +1103,24 @@ foreach ($compatibleVersions as $index => $value) {
   
 
     
-echo '<b>Total Number of Activate Plugin '.': '.$Number_Of_plugin_activate_flag.'</b>'. '<br>';
-echo '<b>Total Number of Deactivate Plugin '.': '.$Number_Of_plugin_deactivate_flag .'</b>'. '<br>';
-         
-    
-echo '<br><br><b>Note:- The Plugin which are showing No Data that are not found on wordpress org as they may be Custom Plugin or licenced Plugin so please check it with the Author or from the website you have buyed, that is there lastest version avaibale for the plugin.<b><br><br><b>After Analysis Of Above Plugin Please Update the WordPress Accordingly.</b>';
+  ?> <script>
+  // Passing the PHP value to JavaScript
+  var Number_Of_plugin_activate_flag = 
+  <?php echo $Number_Of_plugin_activate_flag; ?>;
+  
+  // Setting the value in the HTML
+  document.getElementById("pluginCountValue").textContent = Number_Of_plugin_activate_flag;
+  
+  
+   // Passing the PHP value to JavaScript
+  var Number_Of_plugin_deactivate_flag = 
+  <?php echo $Number_Of_plugin_deactivate_flag; ?>;
+  
+  // Setting the value in the HTML
+  document.getElementById("pluginCountValueinactive").textContent = Number_Of_plugin_deactivate_flag;
+</script>
+    <?php
+echo '<br><b>Note:- The Plugin which are showing No Data that are not found on wordpress org as they may be Custom Plugin or licenced Plugin so please check it with the Author or from the website you have buyed, that is there lastest version avaibale for the plugin.<b><br><br><b>After Analysis Of Above Plugin Please Update the WordPress Accordingly.</b>';
 
 ?>
 <script>
