@@ -2,7 +2,7 @@
 /**
 * Plugin Name: Plugin Compatibility Checker
 * Description: Check Your Plugin are compatibale uptop which version of WordPress, before preforming WordPress Update
-* Version: 4.0.2
+* Version: 5.0.0
 * Author: Dinesh Pilani
 * Author URI: https://www.linkedin.com/in/dineshpilani/
 **/
@@ -185,7 +185,7 @@ public static function PCC_Check_Multisite()
 	
 	
 	
-		echo '<h1>Check Your Plugin Compatibility</h1>';
+		echo '<h1 class="pluginheading">Check Your Plugin Compatibility</h1>';
         // Get Current Version of Running WordPress
         $CurrentWPVersion= get_bloginfo( 'version' );
         $CurrentPhpVersion=  phpversion();
@@ -214,33 +214,46 @@ public static function PCC_Check_Multisite()
      //   echo '<b>Your Current WordPress Version Running is : '.$CurrentWPVersion.'</b><br>';
 //		echo '<b>Your Current PHP Version is : '..'</b><br>';
 	
-	
+		$image_urlwp = plugins_url('icons/wordpress.png', __FILE__);
+    $image_urlinactive = plugins_url('icons/multiplication.png', __FILE__);
+ 	$image_urlactive = plugins_url('icons/check-mark.png', __FILE__);
+    $image_urlphp = plugins_url('icons/php.png', __FILE__);
+    	$image_urlplug = plugins_url('icons/plug.png', __FILE__);
 			echo '
 	
 	<div class="stats-grid">
     <div class="stat-card">
-      <div class="stat-icon">📄</div>
+      <div class="stat-icon">
+            <img src="' . esc_url($image_urlwp) . '" alt="WordPress Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>WordPress</h3>
         <p>'.$CurrentWPVersion.'</p>
       </div>
     </div>
+    
     <div class="stat-card">
-      <div class="stat-icon">⚙️</div>
+      <div class="stat-icon">
+          <img src="' . esc_url($image_urlphp) . '" alt="php Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>PHP</h3>
         <p>'.$CurrentPhpVersion.'</p>
       </div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">🔌</div>
+      <div class="stat-icon">
+         <img src="' . esc_url($image_urlplug) . '" alt="plugin Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>Plugins Installed</h3>
         <p>'.$Total_plugin.'</p>
       </div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">✔️</div>
+      <div class="stat-icon">
+       <img src="' . esc_url($image_urlactive) . '" alt="plugin Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>Plugins Active</h3>
         <p>  <span id="pluginCount"><span id="pluginCountValue"></span></span>
@@ -248,7 +261,9 @@ public static function PCC_Check_Multisite()
       </div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">❌</div>
+      <div class="stat-icon">
+       <img src="' . esc_url($image_urlinactive) . '" alt="plugin Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>Plugins Inactive</h3>
              <p>  <span id="pluginCountinactive"><span id="pluginCountValueinactive"></span></span>
@@ -744,32 +759,46 @@ public static function PCC_Check()
        // echo '<b>Your Current WordPress Version Running is : '.$CurrentWPVersion.'</b><br>';
 	//	echo '<b>Your Current PHP Version is : '.$CurrentPhpVersion.'</b><br>';
 	
-		echo '
+		$image_urlwp = plugins_url('icons/wordpress.png', __FILE__);
+    $image_urlinactive = plugins_url('icons/multiplication.png', __FILE__);
+ 	$image_urlactive = plugins_url('icons/check-mark.png', __FILE__);
+    $image_urlphp = plugins_url('icons/php.png', __FILE__);
+    	$image_urlplug = plugins_url('icons/plug.png', __FILE__);
+			echo '
 	
 	<div class="stats-grid">
     <div class="stat-card">
-      <div class="stat-icon">📄</div>
+      <div class="stat-icon">
+            <img src="' . esc_url($image_urlwp) . '" alt="WordPress Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>WordPress</h3>
         <p>'.$CurrentWPVersion.'</p>
       </div>
     </div>
+    
     <div class="stat-card">
-      <div class="stat-icon">⚙️</div>
+      <div class="stat-icon">
+          <img src="' . esc_url($image_urlphp) . '" alt="php Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>PHP</h3>
         <p>'.$CurrentPhpVersion.'</p>
       </div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">🔌</div>
+      <div class="stat-icon">
+         <img src="' . esc_url($image_urlplug) . '" alt="plugin Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>Plugins Installed</h3>
         <p>'.$Total_plugin.'</p>
       </div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">✔️</div>
+      <div class="stat-icon">
+       <img src="' . esc_url($image_urlactive) . '" alt="plugin Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>Plugins Active</h3>
         <p>  <span id="pluginCount"><span id="pluginCountValue"></span></span>
@@ -777,7 +806,9 @@ public static function PCC_Check()
       </div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">❌</div>
+      <div class="stat-icon">
+       <img src="' . esc_url($image_urlinactive) . '" alt="plugin Icon" id="iconclass">
+      </div>
       <div class="stat-content">
         <h3>Plugins Inactive</h3>
              <p>  <span id="pluginCountinactive"><span id="pluginCountValueinactive"></span></span>

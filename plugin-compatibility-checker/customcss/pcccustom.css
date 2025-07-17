@@ -18,6 +18,8 @@ td {
 
 }
 .pluginheading{
+     font-weight: bold;
+    margin-top: 20px;
     font-size: 1.9rem;
     margin-bottom: 20px;
 }
@@ -196,4 +198,9 @@ table.sysinfo {
 
 .fltr {
     margin-right: 20px !important;
+}
+
+img#iconclass {
+    height: 2em !important;
+    width: 2em !important;
 }
