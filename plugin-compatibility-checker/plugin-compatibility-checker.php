@@ -2,7 +2,7 @@
 /**
 * Plugin Name: Plugin Compatibility Checker
 * Description: Check Your Plugin are compatibale uptop which version of WordPress, before preforming WordPress Update
-* Version: 5.0.0
+* Version: 5.0.1
 * Author: Dinesh Pilani
 * Author URI: https://www.linkedin.com/in/dineshpilani/
 **/
@@ -193,13 +193,16 @@ public static function PCC_Check_Multisite()
         
 
         //Get Stable Version Of WordPress
-        $wordpressurl = 'https://api.wordpress.org/core/version-check/1.7/';
-        $wpresponse = wp_remote_get($wordpressurl);
-        if(!isset($wpresponse) || is_wp_error($wpresponse))
-        {
-            echo '<center><h2>Please Reload The Page Again</h2></center>';
-        }
-        $json = $wpresponse['body'];
+       $wordpressurl = 'https://api.wordpress.org/core/version-check/1.7/';
+$wpresponse   = wp_remote_get( $wordpressurl );
+
+if ( is_wp_error( $wpresponse ) ) {
+    echo '<center><h2>' . esc_html__( 'Please Reload The Page Again', 'plugin-compatibility-checker' ) . '</h2></center>';
+    $json = '';
+} else {
+    $json = wp_remote_retrieve_body( $wpresponse );
+}
+
         if(is_wp_error($json))
         {
             echo '<center><h2>Please Reload The Page Again</h2></center>';
@@ -377,10 +380,18 @@ $loop = 0;
 					$PluginSlug = rtrim($PluginSlug['4'],"/");
 				}
          
-			    $PluginCurrentVersion=$plug['Version'];
-                $Pluginurlwithslug = 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]='.$PluginSlug; 
-                $PluginResponse=wp_remote_get($Pluginurlwithslug); 
-                $PluginResult=$PluginResponse['body'];
+		$PluginCurrentVersion = $plug['Version'];
+$Pluginurlwithslug    = 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=' . $PluginSlug;
+
+$PluginResponse = wp_remote_get( $Pluginurlwithslug );
+
+if ( is_wp_error( $PluginResponse ) ) {
+    error_log( 'Plugin API request failed for ' . $PluginSlug . ': ' . $PluginResponse->get_error_message() );
+    $PluginResult = '';
+} else {
+    $PluginResult = wp_remote_retrieve_body( $PluginResponse );
+}
+
 
 
                 if(!isset($PluginResult) || is_wp_error($PluginResult))
@@ -554,8 +565,15 @@ foreach ($plugin as $plugin_file => $plugin_info) {
     
     
     
-        $PluginResponseversions=wp_remote_get($Pluginurlwithslugforversions); 
-      $PluginResultversions=$PluginResponseversions['body'];
+  $PluginResponseversions = wp_remote_get( $Pluginurlwithslugforversions );
+
+if ( is_wp_error( $PluginResponseversions ) ) {
+    error_log( 'Plugin versions API request failed for ' . $PluginSlug . ': ' . $PluginResponseversions->get_error_message() );
+    $PluginResultversions = '';
+} else {
+    $PluginResultversions = wp_remote_retrieve_body( $PluginResponseversions );
+}
+
       
 
       if(!isset($PluginResultversions) || is_wp_error($PluginResultversions))
@@ -739,13 +757,18 @@ public static function PCC_Check()
         
 
         //Get Stable Version Of WordPress
-        $wordpressurl = 'https://api.wordpress.org/core/version-check/1.7/';
-        $wpresponse = wp_remote_get($wordpressurl);
-        if(!isset($wpresponse) || is_wp_error($wpresponse))
-        {
-            echo '<center><h2>Please Reload The Page Again</h2></center>';
-        }
-        $json = $wpresponse['body'];
+     $wordpressurl = 'https://api.wordpress.org/core/version-check/1.7/';
+$wpresponse   = wp_remote_get( $wordpressurl );
+
+if ( is_wp_error( $wpresponse ) ) {
+    error_log( 'WordPress Core version-check API failed: ' . $wpresponse->get_error_message() );
+    echo '<center><h2>' . esc_html__( 'Please Reload The Page Again', 'plugin-compatibility-checker' ) . '</h2></center>';
+    $json = '';
+} else {
+    $json = wp_remote_retrieve_body( $wpresponse );
+}
+
+
         if(is_wp_error($json))
         {
             echo '<center><h2>Please Reload The Page Again</h2></center>';
@@ -896,10 +919,18 @@ echo '
 					$PluginSlug = rtrim($PluginSlug['4'],"/");
 				}
          
-			    $PluginCurrentVersion=$plug['Version'];
-                $Pluginurlwithslug = 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]='.$PluginSlug; 
-                $PluginResponse=wp_remote_get($Pluginurlwithslug); 
-                $PluginResult=$PluginResponse['body'];
+		$PluginCurrentVersion = $plug['Version'];
+$Pluginurlwithslug    = 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=' . $PluginSlug;
+
+$PluginResponse = wp_remote_get( $Pluginurlwithslug );
+
+if ( is_wp_error( $PluginResponse ) ) {
+    error_log( 'Plugin Info API request failed for ' . $PluginSlug . ': ' . $PluginResponse->get_error_message() );
+    $PluginResult = '';
+} else {
+    $PluginResult = wp_remote_retrieve_body( $PluginResponse );
+}
+
 
 
                 if(!isset($PluginResult) || is_wp_error($PluginResult))
@@ -1045,10 +1076,18 @@ if(!isset($TestuptoVersion) || $TestuptoVersion == '')
 	
 	  
       
-      $Pluginurlwithslugforversions = "https://wptide.org/api/v1/audit/wporg/plugin/$PluginSlug/$PluginLastestVerion?reports=all"; 
-    
-        $PluginResponseversions=wp_remote_get($Pluginurlwithslugforversions); 
-      $PluginResultversions=$PluginResponseversions['body'];
+$Pluginurlwithslugforversions = "https://wptide.org/api/v1/audit/wporg/plugin/$PluginSlug/$PluginLastestVerion?reports=all";
+
+$PluginResponseversions = wp_remote_get( $Pluginurlwithslugforversions );
+
+// Check if request failed
+if ( is_wp_error( $PluginResponseversions ) ) {
+    error_log( 'WPTide API request failed for ' . $PluginSlug . ': ' . $PluginResponseversions->get_error_message() );
+    $PluginResultversions = ''; // fallback so it won’t fatal
+} else {
+    $PluginResultversions = wp_remote_retrieve_body( $PluginResponseversions );
+}
+
       
 
       if(!isset($PluginResultversions) || is_wp_error($PluginResultversions))
