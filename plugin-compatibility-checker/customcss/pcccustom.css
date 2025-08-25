@@ -146,31 +146,42 @@ p.pheading {
     font-weight: 700;
 }
 
+
 .tnip {
-    display: flex;
-    justify-content: space-between;
-max-width: inherit !important;
-    
+  display: flex;
+  justify-content: space-between; /* left vs right */
+  align-items: center;
+  margin: 10px 0;
 }
 
+.pcc-left {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* space between label and dropdown */
+}
 
-#exportButton {
-    margin: 1px;
-     margin-left: auto !important;
-    background-color: #2271b1;
-    border: none;
-    color: white;
-    padding: 10px 20px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 16px;
-    transition-duration: 0.4s;
-    cursor: pointer;
-    border-radius: 8px;
+.pcc-button-group {
+  display: flex;
+  gap: 10px; /* space between buttons */
+}
+
+.pcc-button-group .button {
+  background-color: #2271b1;
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  font-size: 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition-duration: 0.4s;
 }
 
 #exportButton:hover {
+    color: white;
+    background-color: #135e96;
+}
+#pcc-rescan:hover {
+    color: white;
     background-color: #135e96;
 }
 

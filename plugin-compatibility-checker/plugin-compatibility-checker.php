@@ -1,1235 +1,513 @@
 <?php
 /**
-* Plugin Name: Plugin Compatibility Checker
-* Description: Check Your Plugin are compatibale uptop which version of WordPress, before preforming WordPress Update
-* Version: 5.0.1
-* Author: Dinesh Pilani
-* Author URI: https://www.linkedin.com/in/dineshpilani/
-**/
+ * Plugin Name: Plugin Compatibility Checker
+ * Description: Check which WordPress and PHP versions your plugins are compatible with before updating WordPress. Adds caching and a Rescan button.
+ * Version: 5.0.2
+ * Author: Dinesh Pilani
+ * Author URI: https://www.linkedin.com/in/dineshpilani/
+ */
 
-// Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
-if ( !class_exists('PCC')){
-Class PCC{
-  public  function __construct() {
-      
-    
-    if (is_multisite()) {
-      add_action("network_admin_menu", array($this,"PCC_Menu_Pages_multisite"));
-      register_activation_hook(__FILE__,array($this,'hw_check_network_activation'));
- 
-      // Hook the activation check
+if ( ! defined('ABSPATH') ) exit;
 
-    } else {
-        //Hook to add admin menu 
-add_action("admin_menu", array($this,"PCC_Menu_Pages"));
-    }
+if ( ! class_exists('PCC') ) :
 
+class PCC {
 
+	const MENU_SLUG                 = 'PCC_Check';
+	const SUBMENU_SYSINFO_SLUG      = 'websiteinfo';
+	const CAP_SINGLE                = 'manage_options';
+	const CAP_NETWORK               = 'manage_network';
+	const TRANSIENT_KEY             = 'pcc_scan_results';
+	const TRANSIENT_TTL_DEFAULT     = 6 * HOUR_IN_SECONDS; // filterable via 'pcc_cache_ttl'
+	const NONCE_ACTION              = 'pcc_rescan';
+	const AJAX_ACTION               = 'pcc_rescan_now';
 
+	public function __construct() {
+		if ( is_multisite() ) {
+			add_action('network_admin_menu', [ $this, 'register_network_menus' ]);
+			register_activation_hook(__FILE__, [ $this, 'hw_check_network_activation' ]);
+		} else {
+			add_action('admin_menu', [ $this, 'register_menus' ]);
+		}
 
+		add_action('admin_enqueue_scripts', [ $this, 'enqueue_assets' ]);
+		add_action('wp_ajax_' . self::AJAX_ACTION, [ $this, 'ajax_rescan' ]);
+	}
 
-}
+	/* -------------------------
+	 * Activation guard (MS only)
+	 * ------------------------- */
+	public function hw_check_network_activation($network_wide) {
+		if ( ! $network_wide && is_multisite() ) {
+			deactivate_plugins(plugin_basename(__FILE__));
+			wp_die(esc_html__('This plugin can only be activated network-wide.', 'pcc'));
+		}
+	}
 
-// Prevent activation on individual subsites
-function hw_check_network_activation($network_wide) {
-    if (!$network_wide && is_multisite()) {
-        // Deactivate plugin if attempted to be activated on a subsite
-        deactivate_plugins(plugin_basename(__FILE__));
-        wp_die('This plugin can only be activated network-wide.');
-    }
-}
+	/* ---------
+	 * Menus
+	 * --------- */
+	public function register_menus() {
+		add_menu_page(
+			__('Plugin Compatibility Checker', 'pcc'),
+			__('Plugin Compatibility Checker', 'pcc'),
+			self::CAP_SINGLE,
+			self::MENU_SLUG,
+			[ $this, 'render_single_site' ],
+			'dashicons-screenoptions',
+			90
+		);
 
+		add_submenu_page(
+			self::MENU_SLUG,
+			__('System Info', 'pcc'),
+			__('System Info', 'pcc'),
+			self::CAP_SINGLE,
+			self::SUBMENU_SYSINFO_SLUG,
+			[ $this, 'render_sysinfo' ]
+		);
+	}
 
+	public function register_network_menus() {
+		add_menu_page(
+			__('Plugin Compatibility Checker', 'pcc'),
+			__('Plugin Compatibility Checker', 'pcc'),
+			self::CAP_NETWORK,
+			self::MENU_SLUG,
+			[ $this, 'render_network' ],
+			'dashicons-screenoptions',
+			90
+		);
 
+		add_submenu_page(
+			self::MENU_SLUG,
+			__('System Info', 'pcc'),
+			__('System Info', 'pcc'),
+			self::CAP_NETWORK,
+			self::SUBMENU_SYSINFO_SLUG,
+			[ $this, 'render_sysinfo' ]
+		);
+	}
 
-//Define 'UCC_Menu_Pges'
-function PCC_Menu_Pages()
-{
-    add_menu_page( 'Plugin Compatibility Checker', 'Plugin Compatibility Checker', 'manage_options', 'PCC_Check', array(__CLASS__,'PCC_Check'), 'dashicons-screenoptions', 90);
-    add_submenu_page('PCC_Check','System Info','System Info','manage_options','websiteinfo',array(__CLASS__,'Website_info_check'));
-}
+	/* -------------
+	 * Assets
+	 * ------------- */
+	public function enqueue_assets($hook) {
+		$screen = get_current_screen();
+		if ( empty($screen->id) ) return;
+		if ( false === strpos($screen->id, self::MENU_SLUG) && false === strpos($screen->id, self::SUBMENU_SYSINFO_SLUG) ) return;
 
+		// Styles
+		wp_enqueue_style('pcc-custom', plugin_dir_url(__FILE__) . 'customcss/pcccustom.css', [], '1.0.0');
+		wp_enqueue_style('pcc-bootstrap', plugin_dir_url(__FILE__) . 'customcss/bootstrap.min.css', [], '1.0.1');
 
+		// Your existing scripts
+		wp_enqueue_script('pcc-filter', plugin_dir_url(__FILE__) . 'customjs/filtertable.js', ['jquery'], '1.0.0', true);
 
-
-
-function PCC_Menu_Pages_multisite() {
-    // Add the menu page only in the Network Admin
-    add_menu_page(
-        'Plugin Compatibility Checker',       // Page title
-        'Plugin Compatibility Checker',       // Menu title
-        'manage_network',                     // Capability (network admin only)
-        'PCC_Check',                          // Menu slug
-        array(__CLASS__, 'PCC_Check_Multisite'),        // Callback function
-        'dashicons-screenoptions',            // Icon
-        90                                    // Position
-    );
-
-    // Add a submenu page under the main menu
-    add_submenu_page(
-        'PCC_Check',                          // Parent slug
-        'System Info',                        // Page title
-        'System Info',                        // Menu title
-        'manage_network',                     // Capability (network admin only)
-        'websiteinfo',                        // Submenu slug
-        array(__CLASS__, 'Website_info_check')// Callback function
-    );
-}
-
-
-
-
-public static function Website_info_check(){
-  
-    	//Initilize Of My Custom css 
-			wp_enqueue_style( 'pcctablecss.css', plugin_dir_url( __FILE__ ) . 'customcss/pcccustom.css', array(), '1.0.0' );
-			
-			wp_enqueue_style( 'pcctablecss.css' );
-  
-    echo '<h1>System Info</h1>'.'<br>';
-    $CurrentPhpVersion=  phpversion();
-    echo '<b style="font-size:18px;">Your Current PHP Version is : '.$CurrentPhpVersion.'</b><br>';
-	
-//$memory_size = memory_get_usage();
-//$memory_unit = array('Bytes','KB','MB','GB','TB','PB');
-
-
-$spaceBytes = disk_total_space("/");
-$spacefree=disk_free_space("/");
-   
-$spaceGb = $spaceBytes/1024/1024/1024;
-$spaceGb = (int)$spaceGb;
-
-
-$spacefreeGb = $spacefree/1024/1024/1024;
-$spacefreeGb = (int)$spacefreeGb;
-
-$diskUsed=$spaceGb - $spacefreeGb;
-
-echo '<table border =\"1\" style="border-collapse: collapse" class ="sysinfo">';
-   
-
-//echo '<tr><td><b>Memory Used By Website </b> </td><td><b>'.round($memory_size/pow(1024,($x=floor(log($memory_size,1024)))),2).' '.$memory_unit[$x]."</b></td></tr>";
-
-echo "<tr><td><b> Disk Total Space </b></td><td><b> $spaceGb GB </b></td></tr>";
-
-echo "<tr><td><b> Disk Space Used  </b></td><td><b> $diskUsed GB</b></td></tr>";
-
-echo "<tr><td><b> Disk Space Free </b></td><td><b> $spacefreeGb GB</b></td></tr>";
+// Ensure your export script is enqueued (rename filename/handle if different)
+wp_enqueue_script('pcc-export', plugin_dir_url(__FILE__) . 'customjs/export.js', ['jquery'], '1.0.0', true);
 
 
-echo '</table>';
+		// NEW: rescan script (kept separate so your export JS remains untouched)
+		wp_register_script('pcc-rescan', plugin_dir_url(__FILE__) . 'customjs/pcc-rescan.js', ['jquery'], '1.0.0', true);
+		wp_localize_script('pcc-rescan', 'PCCVars', [
+			'ajaxUrl' => admin_url('admin-ajax.php'),
+			'nonce'   => wp_create_nonce(self::NONCE_ACTION),
+			'action'  => self::AJAX_ACTION,
+		]);
+		wp_enqueue_script('pcc-rescan');
+	}
 
-$max_time = ini_get("max_execution_time");
-$max_file_uploads=ini_get("max_file_uploads");
-$max_input_vars=ini_get("max_input_vars");
-$post_max_size=ini_get("post_max_size");
-$memory_limit=ini_get("memory_limit");
-$upload_max_filesize=ini_get("upload_max_filesize");
+	/* -------------
+	 * AJAX: Rescan
+	 * ------------- */
+	public function ajax_rescan() {
+		check_ajax_referer(self::NONCE_ACTION, 'nonce');
 
-echo '<table border =\"1\" style="border-collapse: collapse" class ="sysinfo">';
-echo "<tr><td><b> Max Execution Time  </b></td><td><b> $max_time </b></td></tr>";
-echo "<tr><td><b> Max File Upload </b></td><td><b> $max_file_uploads </b></td></tr>";
-echo "<tr><td><b> Max Input vars  </b></td><td><b> $max_input_vars </b></td></tr>";
-echo "<tr><td><b> Post Max Size  </b></td><td><b> $post_max_size </b></td></tr>";
-echo "<tr><td><b> Memory Limit  </b></td><td><b> $memory_limit </b></td></tr>";
-echo "<tr><td><b> Upload Max FileSize  </b></td><td><b> $upload_max_filesize </b></td></tr>";
- 
+		if ( is_multisite() ) {
+			if ( ! current_user_can(self::CAP_NETWORK) ) wp_send_json_error('forbidden', 403);
+			delete_site_transient(self::TRANSIENT_KEY);
+		} else {
+			if ( ! current_user_can(self::CAP_SINGLE) ) wp_send_json_error('forbidden', 403);
+			delete_transient(self::TRANSIENT_KEY);
+		}
 
-echo '</table>';
-   
-   
-   
-   
-   
-    $Get_Extension=get_loaded_extensions();
-    echo '<center><p class="pheading">List of Extension Loaded</p>'.'<br>';
-    echo '<table border =\"1\" style="border-collapse: collapse" class="extntable">';
-   
-    foreach($Get_Extension as $extn)
-    {
+		// Rebuild now so reload is instant
+		$this->get_scan_results(true);
 
-        echo '<tr><td class="tdstyle">'.$extn.'</td></tr>';
-    }
- 
-    echo '</table></center>';
-   
+		wp_send_json_success(['ok'=>true]);
+	}
 
-}
+	/* -----------------------
+	 * Renderers (UI screens)
+	 * ----------------------- */
+	public function render_network() {
+		if ( ! current_user_can(self::CAP_NETWORK) ) {
+			wp_die(esc_html__('You do not have permission to access this page.', 'pcc'));
+		}
+		$this->render_dashboard(true);
+	}
 
+	public function render_single_site() {
+		if ( ! current_user_can(self::CAP_SINGLE) ) {
+			wp_die(esc_html__('You do not have permission to access this page.', 'pcc'));
+		}
+		$this->render_dashboard(false);
+	}
 
-public static function PCC_Check_Multisite()
-{
-	
-				//Initilize Of My Custom css and js
-			wp_enqueue_style( 'pcctablecss.css', plugin_dir_url( __FILE__ ) . 'customcss/pcccustom.css', array(), '1.0.0' );
-			
-			wp_enqueue_style( 'pcctablecss.css' );
-	
-			wp_enqueue_script( 'filtertable.js', plugin_dir_url( __FILE__ ) . 'customjs/filtertable.js', array(), '1.0.0' );
-			
-			wp_enqueue_script( 'filtertable.js' );
-	
-		
-			wp_enqueue_style( 'bootstrapcss.css', plugin_dir_url( __FILE__ ) . 'customcss/bootstrap.min.css', array(), '1.0.1' );
-			
-			wp_enqueue_style( 'bootstrapcss.css' );
-			
-		//	wp_enqueue_script( 'bootstrapjs.js', plugin_dir_url( __FILE__ ) . 'customjs/bootstrap.min.js', array(), '1.0.1' );
-			
-			//wp_enqueue_script( 'bootstrapjs.js' );
-	
-	
-	
-	
-		echo '<h1 class="pluginheading">Check Your Plugin Compatibility</h1>';
-        // Get Current Version of Running WordPress
-        $CurrentWPVersion= get_bloginfo( 'version' );
-        $CurrentPhpVersion=  phpversion();
+	private function render_dashboard($is_network) {
+		$stats     = $this->get_environment_stats($is_network);
+		$scan      = $this->get_scan_results(false, $is_network);
+		$icons     = [
+			'wp'       => plugins_url('icons/wordpress.png', __FILE__),
+			'php'      => plugins_url('icons/php.png', __FILE__),
+			'plug'     => plugins_url('icons/plug.png', __FILE__),
+			'active'   => plugins_url('icons/check-mark.png', __FILE__),
+			'inactive' => plugins_url('icons/multiplication.png', __FILE__),
+		];
 
-        
+		echo '<h1 class="pluginheading">'.esc_html__('Check Your Plugin Compatibility', 'pcc').'</h1>';
 
-        //Get Stable Version Of WordPress
-       $wordpressurl = 'https://api.wordpress.org/core/version-check/1.7/';
-$wpresponse   = wp_remote_get( $wordpressurl );
+		// Stats grid
+		echo '<div class="stats-grid">';
+		$this->stat_card($icons['wp'], 'WordPress', $stats['wp_version']);
+		$this->stat_card($icons['php'], 'PHP', $stats['php_version']);
+		$this->stat_card($icons['plug'], 'Plugins Installed', (string) $stats['plugins_total']);
+		$this->stat_card($icons['active'], $is_network ? 'Plugins Active (Network)' : 'Plugins Active', (string) $stats['plugins_active']);
+		$this->stat_card($icons['inactive'], $is_network ? 'Plugins Inactive (Network)' : 'Plugins Inactive', (string) $stats['plugins_inactive']);
+		echo '</div>';
 
-if ( is_wp_error( $wpresponse ) ) {
-    echo '<center><h2>' . esc_html__( 'Please Reload The Page Again', 'plugin-compatibility-checker' ) . '</h2></center>';
-    $json = '';
-} else {
-    $json = wp_remote_retrieve_body( $wpresponse );
-}
+		// Core version message
+		if ( version_compare($stats['wp_version'], $stats['wp_latest'], '>=') ) {
+			echo '<br><b>'.esc_html__('You are already on the latest WordPress version.', 'pcc').'</b><br><br>';
+		} else {
+			echo '<br><b>'.sprintf(
+				esc_html__('The latest stable WordPress version available is: %s', 'pcc'),
+				esc_html($stats['wp_latest'])
+			).'</b><br><br>';
+		}
 
-        if(is_wp_error($json))
-        {
-            echo '<center><h2>Please Reload The Page Again</h2></center>';
-        }
-
-        $obj = json_decode($json);
-        $upgrade = $obj->offers[0];
-        $StableVersion=$upgrade->version;
-        $plugin = get_plugins(); 
- $Total_plugin =count($plugin);
- 
-     //   echo '<b>Your Current WordPress Version Running is : '.$CurrentWPVersion.'</b><br>';
-//		echo '<b>Your Current PHP Version is : '..'</b><br>';
-	
-		$image_urlwp = plugins_url('icons/wordpress.png', __FILE__);
-    $image_urlinactive = plugins_url('icons/multiplication.png', __FILE__);
- 	$image_urlactive = plugins_url('icons/check-mark.png', __FILE__);
-    $image_urlphp = plugins_url('icons/php.png', __FILE__);
-    	$image_urlplug = plugins_url('icons/plug.png', __FILE__);
-			echo '
-	
-	<div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-icon">
-            <img src="' . esc_url($image_urlwp) . '" alt="WordPress Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>WordPress</h3>
-        <p>'.$CurrentWPVersion.'</p>
-      </div>
-    </div>
-    
-    <div class="stat-card">
-      <div class="stat-icon">
-          <img src="' . esc_url($image_urlphp) . '" alt="php Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>PHP</h3>
-        <p>'.$CurrentPhpVersion.'</p>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">
-         <img src="' . esc_url($image_urlplug) . '" alt="plugin Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>Plugins Installed</h3>
-        <p>'.$Total_plugin.'</p>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">
-       <img src="' . esc_url($image_urlactive) . '" alt="plugin Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>Plugins Active</h3>
-        <p>  <span id="pluginCount"><span id="pluginCountValue"></span></span>
-</p>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">
-       <img src="' . esc_url($image_urlinactive) . '" alt="plugin Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>Plugins Inactive</h3>
-             <p>  <span id="pluginCountinactive"><span id="pluginCountValueinactive"></span></span>
-      </div>
-    </div>
-  </div>
-
-
-	';
-	
-	
-	
-	
-            if($CurrentWPVersion == $StableVersion)
-		{
-			echo '<br><b>You Are Already Having The Lastest Version of WordPress. </b><br><br>';
-     	}
-		else
-		{
-		echo '<br><b>The Lastest Stable Version Of WordPress is Available is : '.$StableVersion.'</b><br><br>';
-      
-        }
-		
-     
-        echo '<div class="table-responsive table-hover"><table class="table table-bordered" id="pcctable">
-        <thead class="thead-dark">
-        <tr>
-        <th scope="col">Plugin Name</th>
-        <th scope="col">Current Plugin Version</th>
-        <th scope="col">Lastest Plugin Version</th>
-        <th scope="col">Compatible With WordPress Version</th>
-        <th scope="col">Supported PHP Version</th>
-        
-        <th scope="col">Plugin Network Status</th>
-        <th scope="col">Updateable With Latest Version of WordPress</th>
-        <th scope="col">Issues Resolved in Last Two Months</th>
-        </tr>
-        </thead>';
- 
-       // Get all plugins
-//$plugin = get_plugins(); 
-
-// Get the list of network active plugins
-$network_active_plugins = get_site_option('active_sitewide_plugins', array());
- $getpluginstatus=get_option('active_plugins');
-// Initialize counters for active and inactive plugins
-$Number_Of_plugin_activate_flag = 0;
-$Number_Of_plugin_deactivate_flag = 0;
-
-
-
-
-
-
-
-echo '
+		// Controls (filter + export + rescan)
+	echo '
 <div class="tnip">
-<b class="filter">Filter By Plugin Status</b> <select class="form-control fltr" data-role="select-dropdown" id="plgstatus">
-<option value="all">Plugin Status </option>
-<option value="Activated">Activated	</option>
-<option value="Deactivated">Deactivated</option>
-</select>
-    <button id="exportButton">Export to CSV</button>
-</div>
-';
+    <div class="pcc-left">
+        <b class="filter">'.esc_html__('Filter By Plugin Status', 'pcc').'</b>
+        <select class="form-control fltr" data-role="select-dropdown" id="plgstatus">
+            <option value="all">'.esc_html__('Plugin Status', 'pcc').'</option>
+            <option value="Activated">'.esc_html__('Activated', 'pcc').'</option>
+            <option value="Deactivated">'.esc_html__('Deactivated', 'pcc').'</option>
+        </select>
+    </div>
+    <div class="pcc-button-group">
+        <button id="exportButton" class="button button-secondary">'.esc_html__('Export to CSV', 'pcc').'</button>
+        <button id="pcc-rescan" class="button button-primary">'.esc_html__('Rescan', 'pcc').'</button>
+    </div>
+</div>';
 
-$loop = 0;
-		   $storearray=array();
-         foreach($plugin as $plug)
-            {
-         
-              $array_name = array_keys($plugin)[$loop];
-                $plugins_url = plugin_basename($array_name);
-                $plugin_dir_path = dirname($plugins_url);
-         
-         
-            $PluginName=$plug['Name'];
-                $PluginSlug=$plug['TextDomain'];
-                
-              	$PluginURI=$plug['PluginURI'];
-		
-		 if($plugin_dir_path == '.')
-		{
-		 //	$PluginSlug=explode("/", $PluginURI, 5);
-		//			$PluginSlug = rtrim($PluginSlug['4'],"/");   
-		
-		     $PluginSlug = explode("/", $PluginURI, 5);
-    
-    // Print the array for debugging (optional)
-    // print_r($PluginSlug); 
 
-    // Check if the 5th element (index 4) exists
-    if (isset($PluginSlug[4]) && !empty($PluginSlug[4])) {
-        // Remove trailing slashes and assign the value to $PluginSlug
-        $PluginSlug = rtrim($PluginSlug[4], "/");  // Result will be "hello-dolly"
-    } else {
-        // Handle the case where the index does not exist or is empty
-        $PluginSlug = '';  // Set to empty or handle accordingly
-    }
+		// Table
+		$col_status = $is_network ? __('Plugin Network Status', 'pcc') : __('Plugin Status', 'pcc');
 
-		    
+		echo '<div class="table-responsive table-hover"><table class="table table-bordered" id="pcctable">
+			<thead class="thead-dark">
+				<tr>
+					<th scope="col">'.esc_html__('Plugin Name', 'pcc').'</th>
+					<th scope="col">'.esc_html__('Current Plugin Version', 'pcc').'</th>
+					<th scope="col">'.esc_html__('Latest Plugin Version', 'pcc').'</th>
+					<th scope="col">'.esc_html__('Compatible With WordPress Version', 'pcc').'</th>
+					<th scope="col">'.esc_html__('Supported PHP Version', 'pcc').'</th>
+					<th scope="col">'.esc_html($col_status).'</th>
+					<th scope="col">'.esc_html__('Updateable With Latest Version of WordPress', 'pcc').'</th>
+					<th scope="col">'.esc_html__('Issues Resolved in Last Two Months', 'pcc').'</th>
+				</tr>
+			</thead>
+			<tbody class="tbdy">';
+
+		$export_rows = [];
+		foreach ( $scan['rows'] as $row ) {
+			$bg = ($row['current_version'] === $row['latest_version'] && $row['latest_version'] !== 'No Data') ? '#135e96' : '#f64855';
+
+			echo '<tr style="background-color:'.esc_attr($bg).'">';
+			echo '<th scope="row">'.esc_html($row['name']).'</th>';
+			echo '<td>'.esc_html($row['current_version']).'</td>';
+			echo '<td>'.esc_html($row['latest_version']).'</td>';
+			echo '<td>'.esc_html($row['tested_wp']).'</td>';
+			echo '<td>'.esc_html($row['php_supported']).'</td>';
+			echo '<td>'.esc_html($row['status']).'</td>';
+			echo '<td>'.esc_html($row['upgradeable']).'</td>';
+			echo '<td>'.esc_html($row['issues_ratio']).'</td>';
+			echo '</tr>';
+
+			$export_rows[] = [
+				'Plugin Name'                                 => str_replace(',', ' ', $row['name']),
+				'Current Plugin Version'                      => $row['current_version'],
+				'Latest Plugin Version'                       => $row['latest_version'],
+				'Compatible With WordPress Version'           => $row['tested_wp'],
+				'Supported PHP Version'                       => str_replace(',', ' ', $row['php_supported']),
+				$is_network ? 'Plugin Network Status' : 'Plugin Status' => $row['status'],
+				'Updateable With Latest Version of WordPress' => $row['upgradeable'],
+				'Issues Resolved in Last Two Months'          => "'" . str_replace(':','', $row['issues_ratio']),
+			];
 		}
-		else if(isset($plugin_dir_path))
-		{
-		    $PluginSlug = $plugin_dir_path;
+
+		echo '</tbody></table></div>';
+
+		// Note
+		echo '<br><b>'.esc_html__('Note: "No Data" plugins were not found on WordPress.org (custom or licensed). Check with the author/vendor for their latest version.', 'pcc').'</b>';
+		echo '<br><br><b>'.esc_html__('After reviewing the table above, update WordPress accordingly.', 'pcc').'</b>';
+
+		// Expose export data (keeps your export JS compatible)
+		printf('<script>window.PCCExportData=%s;</script>', wp_json_encode($export_rows));
+	}
+
+	private function stat_card($icon_url, $title, $value_html) {
+		echo '<div class="stat-card">
+			<div class="stat-icon"><img src="'.esc_url($icon_url).'" alt="'.esc_attr($title).' Icon" id="iconclass"></div>
+			<div class="stat-content">
+				<h3>'.esc_html($title).'</h3>
+				<p>'.esc_html($value_html).'</p>
+			</div>
+		</div>';
+	}
+
+	/* -----------------
+	 * System Info page
+	 * ----------------- */
+	public function render_sysinfo() {
+		$cap = is_multisite() ? self::CAP_NETWORK : self::CAP_SINGLE;
+		if ( ! current_user_can($cap) ) {
+			wp_die(esc_html__('You do not have permission to access this page.', 'pcc'));
 		}
-		
-				else
-				{
-					$PluginSlug=explode("/", $PluginURI, 5);
-					$PluginSlug = rtrim($PluginSlug['4'],"/");
-				}
-         
-		$PluginCurrentVersion = $plug['Version'];
-$Pluginurlwithslug    = 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=' . $PluginSlug;
 
-$PluginResponse = wp_remote_get( $Pluginurlwithslug );
+		echo '<h1>'.esc_html__('System Info', 'pcc').'</h1><br>';
 
-if ( is_wp_error( $PluginResponse ) ) {
-    error_log( 'Plugin API request failed for ' . $PluginSlug . ': ' . $PluginResponse->get_error_message() );
-    $PluginResult = '';
-} else {
-    $PluginResult = wp_remote_retrieve_body( $PluginResponse );
-}
+		$php = phpversion();
+		echo '<b style="font-size:18px;">'.sprintf(esc_html__('Your Current PHP Version is: %s', 'pcc'), esc_html($php)).'</b><br>';
 
+		$space_total_gb = (int) ( @disk_total_space(ABSPATH) / 1024 / 1024 / 1024 );
+		$space_free_gb  = (int) ( @disk_free_space(ABSPATH)  / 1024 / 1024 / 1024 );
+		$space_used_gb  = max(0, $space_total_gb - $space_free_gb);
 
+		echo '<table class="sysinfo"><tr><td><b>'.esc_html__('Disk Total Space', 'pcc').'</b></td><td><b>'.intval($space_total_gb).' GB</b></td></tr>';
+		echo '<tr><td><b>'.esc_html__('Disk Space Used', 'pcc').'</b></td><td><b>'.intval($space_used_gb).' GB</b></td></tr>';
+		echo '<tr><td><b>'.esc_html__('Disk Space Free', 'pcc').'</b></td><td><b>'.intval($space_free_gb).' GB</b></td></tr></table>';
 
-                if(!isset($PluginResult) || is_wp_error($PluginResult))
-                {
-                    echo '<center><h2>Please Reload The Page Again</h2></center>';
-                }
-                $pluginobj = json_decode($PluginResult, true);
-              
-                if (!isset($pluginobj['error']))
-                            { 
-                                
-                                   
-                                            $TestuptoVersion=$pluginobj['tested'];
-                                            $PluginLastestVerion=$pluginobj['version'];
-                                       
-                                        
-                                            $PluginSupportThreads=$pluginobj['support_threads'];
-                                             $PluginSupportThreadsResolved=$pluginobj['support_threads_resolved'];
-                                      $Requirephpversion=$pluginobj['requires_php'];
+		$ini = [
+			'Max Execution Time' => ini_get('max_execution_time'),
+			'Max File Uploads'   => ini_get('max_file_uploads'),
+			'Max Input Vars'     => ini_get('max_input_vars'),
+			'Post Max Size'      => ini_get('post_max_size'),
+			'Memory Limit'       => ini_get('memory_limit'),
+			'Upload Max Filesize'=> ini_get('upload_max_filesize'),
+		];
 
-                                            
-                                        
-                            }
-                           else
-                           {
-                               
-                                            $TestuptoVersion= 'No Data';
-                                            $PluginLastestVerion='No Data';
-                                       
-                                        
-                                            $PluginSupportThreads='No Data';
-                                             $PluginSupportThreadsResolved='No Data';
-                                      $Requirephpversion='No Data';
-                                    
-                              
-                           }
-                            
-                          
-
-if(!isset($Requirephpversion) || $Requirephpversion == false || $Requirephpversion == '')
-{
-
-    $Requirephpversion ='No Data';
-}
-if(!isset($TestuptoVersion) || $TestuptoVersion == '')
-{
-    $TestuptoVersion='No Data';
-}
-
-                    if($StableVersion == $TestuptoVersion)
-                    {
-                        $Upgradeable='Yes';
-                       
-                    }
-                    else if($TestuptoVersion == 'No Data')
-                    {
-                        $Upgradeable = 'No Data';
-                    }
-					 else if($TestuptoVersion == '6.2.0')
-                      {
-                          $Upgradeable='Yes';
-                          
-                      }
- 			else if($TestuptoVersion > $StableVersion)
-			{
-                          
-                           $Upgradeable='Yes';
-                      }
-                    else
-                    {
-                        $Upgradeable='No';
-                    }
-                      
-       
-           if($PluginName){
- 
- // Check each plugin for network activation
-foreach ($plugin as $plugin_file => $plugin_info) {
-    // Check if the plugin is network active
-    if (array_key_exists($plugin_file, $network_active_plugins)) {
-        
-        
-        if($plugin_info['Name'] == $PluginName)
-        {
-            $plugstats= 'Activated';
-        
-        }
-        
-        
-        $Number_Of_plugin_activate_flag++;
-        break;
-        
-    } else if($plugin_info['Name'] == $PluginName) {
-        $plugstats= 'Deactivated';
-        $Number_Of_plugin_deactivate_flag++;
-        break;
-        
-    }
-  
-}
-
- 
- 
- 
-        
-       }
-          if(!isset($PluginLastestVerion))
-          {
-              $PluginLastestVerion='No Data'; 
-              
-          }
-          
-      if($PluginCurrentVersion == $PluginLastestVerion)
-      {
-            $trowcolor='#135e96';
-     }
-      else
-      {
-        $trowcolor='#f64855';
-        
-
-      }
-      
-        if(!isset($PluginSupportThreadsResolved))
-	  {
-	      $PluginSupportThreadsResolved ='No Data';
-	  }
-      
-      if(!isset($PluginSupportThreads ))
-      {
-          
-          $PluginSupportThreads='No Data';
-      }
-      
-      if($PluginSupportThreadsResolved == ':0' && $PluginSupportThreads == ':0')
-      {
-        $numberofcases='There Are No Issues';
-      }
-      else
-      {
-      $numberofcases=$PluginSupportThreadsResolved.'/'.$PluginSupportThreads;
-      }
-	  
-	  if($PluginSupportThreadsResolved == 'No Data' && $PluginSupportThreads == 'No Data')
-	  {
-	   $numberofcases ='No Data';   
-	  }
-	  
-	  
-	  
-	  if(!isset($PluginSupportThreadsResolved))
-	  {
-	      
-	      $PluginSupportThreadsResolved='No Data';
-	  }
-	  
-	
-	  
-    
-   // if($PluginName == 'Plugin Compatibility Checker')
-    //{
-      //    $Pluginurlwithslugforversions = "https://wptide.org/api/v1/audit/wporg/plugin/plugin-compatibility-checker/3.0.1?reports=all";
-        
-    //}
-     // else
-     // {
-      $Pluginurlwithslugforversions = "https://wptide.org/api/v1/audit/wporg/plugin/$PluginSlug/$PluginLastestVerion?reports=all"; 
-     // }
-    
-    
-    
-    
-    
-  $PluginResponseversions = wp_remote_get( $Pluginurlwithslugforversions );
-
-if ( is_wp_error( $PluginResponseversions ) ) {
-    error_log( 'Plugin versions API request failed for ' . $PluginSlug . ': ' . $PluginResponseversions->get_error_message() );
-    $PluginResultversions = '';
-} else {
-    $PluginResultversions = wp_remote_retrieve_body( $PluginResponseversions );
-}
-
-      
-
-      if(!isset($PluginResultversions) || is_wp_error($PluginResultversions))
-      {
-          echo '<center><h2>Please Reload The Page Again</h2></center>';
-      }
-      $pluginobjversion = json_decode($PluginResultversions, true);
-    
-   
-    
-      if (!isset($pluginobjversion['error']))
-                  { 
-                   
-                   $stat=$pluginobjversion['status'];  
-                     
-                     
-                     
-                      if(isset($pluginobjversion['reports']) && isset($pluginobjversion['reports']['phpcs_phpcompatibilitywp']['report']['compatible']))
-                     {
-                 $compatibleVersions = $pluginobjversion['reports']['phpcs_phpcompatibilitywp']['report']['compatible'];
-            
-          
-              
-         $destination_array = '';
-
-foreach ($compatibleVersions as $index => $value) {
-    $destination_array .= $value;
-
-    if ($index < count($compatibleVersions) - 1) {
-        $destination_array .= ', ';
-    }
-}
-
-
-}
- 
- if(!isset($destination_array) || $destination_array == '' || $stat == '404' || $PluginLastestVerion == 'No Data')
-             {
-                 $destination_array= 'No Data';
-             }
-
-
-                  }
-
-   
-            
-
-
-	  
-	  
-        echo '<tbody class="tbdy" style="background-color:'.$trowcolor.'">
-        <tr>
-        <th scope="row">'.$PluginName.'</th>
-        <td>'.$PluginCurrentVersion.'</td>
-        <td>'.$PluginLastestVerion.'</td>
-        <td>'.$TestuptoVersion.'</td>
-        <td>'.$destination_array.'</td>
-        
-        <td>'.$plugstats.'</td>
-        <td>'.$Upgradeable.'</td>
-        <td>'.str_replace(":","",$numberofcases).'</td>
-        </tr>';
-		    $loop = $loop + 1; 
-		    
-		 
-		 
-	    // Creating Array to export data to excel	 
-		 $storearray[] = array(
-        'Plugin Name' => str_replace(","," ",$PluginName),
-        'Current Plugin Version' => $PluginCurrentVersion,
-        'Lastest Plugin Version' => $PluginLastestVerion,
-        'Compatible With WordPress Version' => $TestuptoVersion,
-        'Supported PHP Version' => str_replace(","," ",$destination_array),
-        'Plugin Status' => $plugstats,
-        'Updateable With Latest Version of WordPress' => $Upgradeable,
-        'Issues Resolved in Last Two Months' => "'".str_replace(":","",$numberofcases)
-    );
-    
-    
-    }
-        echo '</tbody>
-        </table> </div>';
-  
-
-    
-
-          ?> <script>
-  // Passing the PHP value to JavaScript
-  var Number_Of_plugin_activate_flag = 
-  <?php echo $Number_Of_plugin_activate_flag; ?>;
-  
-  // Setting the value in the HTML
-  document.getElementById("pluginCountValue").textContent = Number_Of_plugin_activate_flag;
-  
-  
-   // Passing the PHP value to JavaScript
-  var Number_Of_plugin_deactivate_flag = 
-  <?php echo $Number_Of_plugin_deactivate_flag; ?>;
-  
-  // Setting the value in the HTML
-  document.getElementById("pluginCountValueinactive").textContent = Number_Of_plugin_deactivate_flag;
-</script>
-    <?php
-         
-         
-         
-    
-echo '<br><br><b>Note:- The Plugin which are showing No Data that are not found on wordpress org as they may be Custom Plugin or licenced Plugin so please check it with the Author or from the website you have buyed, that is there lastest version avaibale for the plugin.<b><br><br><b>After Analysis Of Above Plugin Please Update the WordPress Accordingly.</b>';
-
-?>
-<script>
-document.getElementById('exportButton').addEventListener('click', function() {
-    // Example array data
-    var dataArray = <?php echo wp_json_encode($storearray); ?>;
-    
-    // Convert the array data to CSV format
-    var csvContent = "data:text/csv;charset=utf-8,";
-    
-    // Construct the header row
-    var headerRow = Object.keys(dataArray[0]).join(",");
-    csvContent += headerRow + "\r\n";
-    
-    // Iterate over each object in the array
-    dataArray.forEach(function(rowObject) {
-        // Construct each row of data
-        var row = Object.values(rowObject).join(",");
-        csvContent += row + "\r\n";
-    });
-    
-    // Create a link element and trigger a click event to initiate download
-    var encodedUri = encodeURI(csvContent);
-    var link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "export.csv");
-    document.body.appendChild(link); // Required for Firefox
-    link.click();
-});
-</script>
-
-
-
-
-<?php
-
-
-
-
-}  
-
-
-//Define function
-public static function PCC_Check()
-{
-	
-				//Initilize Of My Custom css and js
-			wp_enqueue_style( 'pcctablecss.css', plugin_dir_url( __FILE__ ) . 'customcss/pcccustom.css', array(), '1.0.0' );
-			
-			wp_enqueue_style( 'pcctablecss.css' );
-	
-			wp_enqueue_script( 'filtertable.js', plugin_dir_url( __FILE__ ) . 'customjs/filtertable.js', array(), '1.0.0' );
-			
-			wp_enqueue_script( 'filtertable.js' );
-	
-		
-			wp_enqueue_style( 'bootstrapcss.css', plugin_dir_url( __FILE__ ) . 'customcss/bootstrap.min.css', array(), '1.0.1' );
-			
-			wp_enqueue_style( 'bootstrapcss.css' );
-			
-		//	wp_enqueue_script( 'bootstrapjs.js', plugin_dir_url( __FILE__ ) . 'customjs/bootstrap.min.js', array(), '1.0.1' );
-			
-			//wp_enqueue_script( 'bootstrapjs.js' );
-	
-	
-	
-	
-		echo '<h1 class="pluginheading">Check Your Plugin Compatibility</h1>';
-        // Get Current Version of Running WordPress
-        $CurrentWPVersion= get_bloginfo( 'version' );
-        $CurrentPhpVersion=  phpversion();
-
-        
-
-        //Get Stable Version Of WordPress
-     $wordpressurl = 'https://api.wordpress.org/core/version-check/1.7/';
-$wpresponse   = wp_remote_get( $wordpressurl );
-
-if ( is_wp_error( $wpresponse ) ) {
-    error_log( 'WordPress Core version-check API failed: ' . $wpresponse->get_error_message() );
-    echo '<center><h2>' . esc_html__( 'Please Reload The Page Again', 'plugin-compatibility-checker' ) . '</h2></center>';
-    $json = '';
-} else {
-    $json = wp_remote_retrieve_body( $wpresponse );
-}
-
-
-        if(is_wp_error($json))
-        {
-            echo '<center><h2>Please Reload The Page Again</h2></center>';
-        }
-
-        $obj = json_decode($json);
-        $upgrade = $obj->offers[0];
-        $StableVersion=$upgrade->version;
-    $plugin = get_plugins(); 
- $Total_plugin =count($plugin);
-       // echo '<b>Your Current WordPress Version Running is : '.$CurrentWPVersion.'</b><br>';
-	//	echo '<b>Your Current PHP Version is : '.$CurrentPhpVersion.'</b><br>';
-	
-		$image_urlwp = plugins_url('icons/wordpress.png', __FILE__);
-    $image_urlinactive = plugins_url('icons/multiplication.png', __FILE__);
- 	$image_urlactive = plugins_url('icons/check-mark.png', __FILE__);
-    $image_urlphp = plugins_url('icons/php.png', __FILE__);
-    	$image_urlplug = plugins_url('icons/plug.png', __FILE__);
-			echo '
-	
-	<div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-icon">
-            <img src="' . esc_url($image_urlwp) . '" alt="WordPress Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>WordPress</h3>
-        <p>'.$CurrentWPVersion.'</p>
-      </div>
-    </div>
-    
-    <div class="stat-card">
-      <div class="stat-icon">
-          <img src="' . esc_url($image_urlphp) . '" alt="php Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>PHP</h3>
-        <p>'.$CurrentPhpVersion.'</p>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">
-         <img src="' . esc_url($image_urlplug) . '" alt="plugin Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>Plugins Installed</h3>
-        <p>'.$Total_plugin.'</p>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">
-       <img src="' . esc_url($image_urlactive) . '" alt="plugin Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>Plugins Active</h3>
-        <p>  <span id="pluginCount"><span id="pluginCountValue"></span></span>
-</p>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">
-       <img src="' . esc_url($image_urlinactive) . '" alt="plugin Icon" id="iconclass">
-      </div>
-      <div class="stat-content">
-        <h3>Plugins Inactive</h3>
-             <p>  <span id="pluginCountinactive"><span id="pluginCountValueinactive"></span></span>
-      </div>
-    </div>
-  </div>
-
-
-	';
-	
-	
-	
-        if($CurrentWPVersion == $StableVersion)
-		{
-			echo '<br><b>You Are Already Having The Lastest Version of WordPress. </b><br><br>';
-     	}
-		else
-		{
-		echo '<br><b>The Lastest Stable Version Of WordPress is Available is : '.$StableVersion.'</b><br><br>';
-      
-        }
-		
-        // Include StyleSheet and Initilize Table
-        //echo '';
-        echo '<div class="table-responsive table-hover"><table class="table table-bordered" id="pcctable">
-        <thead class="thead-dark">
-        <tr>
-        <th scope="col">Plugin Name</th>
-        <th scope="col">Current Plugin Version</th>
-        <th scope="col">Lastest Plugin Version</th>
-        <th scope="col">Compatible With WordPress Version</th>
-        <th scope="col">Supported PHP Version</th>
-        
-        <th scope="col">Plugin Status</th>
-        <th scope="col">Updateable With Latest Version of WordPress</th>
-        <th scope="col">Issues Resolved in Last Two Months</th>
-        </tr>
-        </thead>';
- 
-        
-        // $plugin=get_plugins();
-         $getpluginstatus=get_option('active_plugins');
-      //   $Total_plugin =count($plugin);
-        $Number_Of_plugin_activate_flag= 0;
-        $Number_Of_plugin_deactivate_flag= 0;
-        
-echo '
-<div class="tnip">
-<b class="filter">Filter By Plugin Status</b> <select class="form-control fltr" data-role="select-dropdown" id="plgstatus">
-<option value="all">Plugin Status </option>
-<option value="Activated">Activated	</option>
-<option value="Deactivated">Deactivated</option>
-</select>
-    <button id="exportButton">Export to CSV</button>
-</div>
-';
-		  $loop = 0;
-		   $storearray=array();
-         foreach($plugin as $plug)
-            {
-         
-              $array_name = array_keys($plugin)[$loop];
-                $plugins_url = plugin_basename($array_name);
-                $plugin_dir_path = dirname($plugins_url);
-         
-         
-            $PluginName=$plug['Name'];
-                $PluginSlug=$plug['TextDomain'];
-                
-              	$PluginURI=$plug['PluginURI'];
-		
-		 if($plugin_dir_path == '.')
-		{
-		 	$PluginSlug=explode("/", $PluginURI, 5);
-					$PluginSlug = rtrim($PluginSlug['4'],"/");   
+		echo '<table class="sysinfo">';
+		foreach ($ini as $k => $v) {
+			echo '<tr><td><b>'.esc_html($k).'</b></td><td><b>'.esc_html($v).'</b></td></tr>';
 		}
-		else if(isset($plugin_dir_path))
-		{
-		    $PluginSlug = $plugin_dir_path;
+		echo '</table>';
+
+		$exts = get_loaded_extensions();
+		sort($exts, SORT_NATURAL | SORT_FLAG_CASE);
+
+		echo '<center><p class="pheading">'.esc_html__('List of Loaded Extensions', 'pcc').'</p><br>';
+		echo '<table class="extntable">';
+		foreach ( $exts as $ext ) {
+			echo '<tr><td class="tdstyle">'.esc_html($ext).'</td></tr>';
 		}
-		
-				else
-				{
-					$PluginSlug=explode("/", $PluginURI, 5);
-					$PluginSlug = rtrim($PluginSlug['4'],"/");
-				}
-         
-		$PluginCurrentVersion = $plug['Version'];
-$Pluginurlwithslug    = 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=' . $PluginSlug;
+		echo '</table></center>';
+	}
 
-$PluginResponse = wp_remote_get( $Pluginurlwithslug );
+	/* -----------------------
+	 * Data builders (cached)
+	 * ----------------------- */
+	private function get_environment_stats($is_network) {
+		$wp_version = get_bloginfo('version');
+		$php_ver    = phpversion();
+		$plugins    = get_plugins();
+		$total      = count($plugins);
 
-if ( is_wp_error( $PluginResponse ) ) {
-    error_log( 'Plugin Info API request failed for ' . $PluginSlug . ': ' . $PluginResponse->get_error_message() );
-    $PluginResult = '';
-} else {
-    $PluginResult = wp_remote_retrieve_body( $PluginResponse );
+		if ( $is_network ) {
+			$active_sitewide = (array) get_site_option('active_sitewide_plugins', []);
+			$active = 0;
+			foreach ($plugins as $file => $info) {
+				if ( isset($active_sitewide[$file]) ) $active++;
+			}
+		} else {
+			$active_plugins = (array) get_option('active_plugins', []);
+			$active = 0;
+			foreach ($plugins as $file => $info) {
+				if ( in_array($file, $active_plugins, true) ) $active++;
+			}
+		}
+		$inactive = max(0, $total - $active);
+
+		$wp_latest = $this->fetch_wp_latest_version();
+
+		return [
+			'wp_version'      => $wp_version,
+			'php_version'     => $php_ver,
+			'plugins_total'   => $total,
+			'plugins_active'  => $active,
+			'plugins_inactive'=> $inactive,
+			'wp_latest'       => $wp_latest,
+		];
+	}
+
+	private function get_scan_results($force_rebuild = false, $is_network = null) {
+		if ( is_null($is_network) ) $is_network = is_multisite();
+		$key = self::TRANSIENT_KEY;
+		$ttl = apply_filters('pcc_cache_ttl', self::TRANSIENT_TTL_DEFAULT);
+
+		$data = $is_network ? get_site_transient($key) : get_transient($key);
+		if ( $force_rebuild || empty($data) || ! is_array($data) ) {
+			$data = $this->build_scan_results($is_network);
+			if ( $is_network ) {
+				set_site_transient($key, $data, $ttl);
+			} else {
+				set_transient($key, $data, $ttl);
+			}
+		}
+		return $data;
+	}
+
+	private function build_scan_results($is_network) {
+		$plugins        = get_plugins();
+		$wp_latest      = $this->fetch_wp_latest_version();
+
+		// Active map
+		if ( $is_network ) {
+			$active_map = (array) get_site_option('active_sitewide_plugins', []);
+		} else {
+			$active_map = array_fill_keys( (array) get_option('active_plugins', []), true );
+		}
+
+		$rows = [];
+
+		foreach ( $plugins as $file => $plug ) {
+			$name        = isset($plug['Name']) ? $plug['Name'] : $file;
+			$current_ver = isset($plug['Version']) ? $plug['Version'] : '';
+			$plugin_uri  = isset($plug['PluginURI']) ? $plug['PluginURI'] : '';
+			$text_domain = isset($plug['TextDomain']) ? $plug['TextDomain'] : '';
+			$slug        = $this->resolve_plugin_slug($file, $text_domain, $plugin_uri);
+
+			$info = $slug ? $this->fetch_wporg_plugin_info($slug) : [];
+
+			$tested_wp     = $info['tested']           ?? 'No Data';
+			$latest_ver    = $info['version']          ?? 'No Data';
+			$support_total = $info['support_threads']  ?? 'No Data';
+			$support_res   = $info['support_resolved'] ?? 'No Data';
+			$requires_php  = $info['requires_php']     ?? 'No Data';
+
+			$status = ($is_network)
+				? ( isset($active_map[$file]) ? 'Activated' : 'Deactivated' )
+				: ( isset($active_map[$file]) ? 'Activated' : 'Deactivated' );
+
+			$upgradeable = 'No Data';
+			if ( 'No Data' !== $tested_wp ) {
+				if ( version_compare($tested_wp, $wp_latest, '>=') ) $upgradeable = 'Yes';
+				else $upgradeable = ( $tested_wp === '6.2.0' ) ? 'Yes' : 'No'; // kept your exception
+			}
+
+			$issues_ratio = 'No Data';
+			if ($support_total === ':0' && $support_res === ':0') {
+				$issues_ratio = 'There Are No Issues';
+			} elseif ($support_total !== 'No Data' && $support_res !== 'No Data') {
+				$issues_ratio = str_replace(':','', $support_res) . '/' . str_replace(':','', $support_total);
+			}
+
+			$php_supported = 'No Data';
+			if ( $slug && 'No Data' !== $latest_ver ) {
+				$php_supported = $this->fetch_wptide_php_compat_list($slug, $latest_ver);
+			}
+
+			$rows[] = [
+				'name'            => $name,
+				'current_version' => $current_ver ?: 'No Data',
+				'latest_version'  => $latest_ver,
+				'tested_wp'       => $tested_wp,
+				'php_supported'   => $php_supported,
+				'status'          => $status,
+				'upgradeable'     => $upgradeable,
+				'issues_ratio'    => $issues_ratio,
+			];
+		}
+
+		return [ 'rows' => $rows ];
+	}
+
+	/* -------------------
+	 * Helpers (fetching)
+	 * ------------------- */
+	private function resolve_plugin_slug($plugin_file, $text_domain, $plugin_uri) {
+		$dir = dirname($plugin_file);
+		if ( $dir && $dir !== '.' ) {
+			return $dir;
+		}
+		if ( ! empty($text_domain) ) {
+			return sanitize_title($text_domain);
+		}
+		if ( $plugin_uri ) {
+			$parts = explode('/', $plugin_uri, 5);
+			if ( isset($parts[4]) && ! empty($parts[4]) ) {
+				return rtrim($parts[4], '/');
+			}
+		}
+		return '';
+	}
+
+	private function fetch_wp_latest_version() {
+		$url = 'https://api.wordpress.org/core/version-check/1.7/';
+		$res = wp_remote_get($url, [ 'timeout' => 15 ]);
+		if ( is_wp_error($res) ) {
+			error_log('PCC: WP core version-check failed: ' . $res->get_error_message());
+			return get_bloginfo('version');
+		}
+		$body = wp_remote_retrieve_body($res);
+		$obj  = json_decode($body);
+		return isset($obj->offers[0]->version) ? $obj->offers[0]->version : get_bloginfo('version');
+	}
+
+	private function fetch_wporg_plugin_info($slug) {
+		$url = 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=' . rawurlencode($slug);
+		$res = wp_remote_get($url, [ 'timeout' => 20 ]);
+		if ( is_wp_error($res) ) {
+			error_log('PCC: Plugin info API failed for '.$slug.': '.$res->get_error_message());
+			return [];
+		}
+		$body = wp_remote_retrieve_body($res);
+		$data = json_decode($body, true);
+		if ( isset($data['error']) ) return [];
+		return [
+			'tested'           => $data['tested']              ?? null,
+			'version'          => $data['version']             ?? null,
+			'support_threads'  => $data['support_threads']     ?? null,
+			'support_resolved' => $data['support_threads_resolved'] ?? null,
+			'requires_php'     => $data['requires_php']        ?? null,
+		];
+	}
+
+	private function fetch_wptide_php_compat_list($slug, $latest_version) {
+		$url = sprintf('https://wptide.org/api/v1/audit/wporg/plugin/%s/%s?reports=all', rawurlencode($slug), rawurlencode($latest_version));
+		$res = wp_remote_get($url, [ 'timeout' => 20 ]);
+		if ( is_wp_error($res) ) {
+			error_log('PCC: WPTide request failed for '.$slug.': '.$res->get_error_message());
+			return 'No Data';
+		}
+		$body = wp_remote_retrieve_body($res);
+		$data = json_decode($body, true);
+		if ( ! is_array($data) || isset($data['error']) ) return 'No Data';
+
+		$status = $data['status'] ?? null;
+		if ( (string) $status === '404' ) return 'No Data';
+
+		$compat_arr = $data['reports']['phpcs_phpcompatibilitywp']['report']['compatible'] ?? null;
+		if ( ! is_array($compat_arr) || empty($compat_arr) ) return 'No Data';
+
+		return implode(', ', $compat_arr);
+	}
 }
 
-
-
-                if(!isset($PluginResult) || is_wp_error($PluginResult))
-                {
-                    echo '<center><h2>Please Reload The Page Again</h2></center>';
-                }
-                $pluginobj = json_decode($PluginResult, true);
-              
-                if (!isset($pluginobj['error']))
-                            { 
-                                
-                                   
-                                            $TestuptoVersion=$pluginobj['tested'];
-                                            $PluginLastestVerion=$pluginobj['version'];
-                                       
-                                        
-                                            $PluginSupportThreads=$pluginobj['support_threads'];
-                                             $PluginSupportThreadsResolved=$pluginobj['support_threads_resolved'];
-                                      $Requirephpversion=$pluginobj['requires_php'];
-
-                                            
-                                        
-                            }
-                           else
-                           {
-                               
-                                            $TestuptoVersion= 'No Data';
-                                            $PluginLastestVerion='No Data';
-                                       
-                                        
-                                            $PluginSupportThreads='No Data';
-                                             $PluginSupportThreadsResolved='No Data';
-                                      $Requirephpversion='No Data';
-                                    
-                              
-                           }
-                            
-                          
-
-if(!isset($Requirephpversion) || $Requirephpversion == false || $Requirephpversion == '')
-{
-
-    $Requirephpversion ='No Data';
-}
-if(!isset($TestuptoVersion) || $TestuptoVersion == '')
-{
-    $TestuptoVersion='No Data';
-}
-
-                    if($StableVersion == $TestuptoVersion)
-                    {
-                        $Upgradeable='Yes';
-                       
-                    }
-                    else if($TestuptoVersion == 'No Data')
-                    {
-                        $Upgradeable = 'No Data';
-                    }
-					 else if($TestuptoVersion == '6.2.0')
-                      {
-                          $Upgradeable='Yes';
-                          
-                      }
- 			else if($TestuptoVersion > $StableVersion)
-			{
-                          
-                           $Upgradeable='Yes';
-                      }
-                    else
-                    {
-                        $Upgradeable='No';
-                    }
-                      
-        
-           if($PluginSlug){
- 
-   $pattern = '/' . preg_quote($PluginSlug, '/') . '/';
-   if (preg_grep($pattern, $getpluginstatus))
-   {
-
-     
-     $plugstats= 'Activated';
-     $Number_Of_plugin_activate_flag = $Number_Of_plugin_activate_flag + 1;
-      }
-      else
-            {
-                
-                $plugstats= 'Deactivated';
-                $Number_Of_plugin_deactivate_flag = $Number_Of_plugin_deactivate_flag + 1;
-            }
-        
-       }
-          if(!isset($PluginLastestVerion))
-          {
-              $PluginLastestVerion='No Data'; 
-              
-          }
-          
-      if($PluginCurrentVersion == $PluginLastestVerion)
-      {
-            $trowcolor='#135e96';
-     }
-      else
-      {
-        $trowcolor='#f64855';
-        
-
-      }
-      
-        if(!isset($PluginSupportThreadsResolved))
-	  {
-	      $PluginSupportThreadsResolved ='No Data';
-	  }
-      
-      if(!isset($PluginSupportThreads ))
-      {
-          
-          $PluginSupportThreads='No Data';
-      }
-      
-      if($PluginSupportThreadsResolved == ':0' && $PluginSupportThreads == ':0')
-      {
-        $numberofcases='There Are No Issues';
-      }
-      else
-      {
-      $numberofcases=$PluginSupportThreadsResolved.'/'.$PluginSupportThreads;
-      }
-	  
-	  if($PluginSupportThreadsResolved == 'No Data' && $PluginSupportThreads == 'No Data')
-	  {
-	   $numberofcases ='No Data';   
-	  }
-	  
-	  
-	  
-	  if(!isset($PluginSupportThreadsResolved))
-	  {
-	      
-	      $PluginSupportThreadsResolved='No Data';
-	  }
-	  
-	
-	  
-      
-$Pluginurlwithslugforversions = "https://wptide.org/api/v1/audit/wporg/plugin/$PluginSlug/$PluginLastestVerion?reports=all";
-
-$PluginResponseversions = wp_remote_get( $Pluginurlwithslugforversions );
-
-// Check if request failed
-if ( is_wp_error( $PluginResponseversions ) ) {
-    error_log( 'WPTide API request failed for ' . $PluginSlug . ': ' . $PluginResponseversions->get_error_message() );
-    $PluginResultversions = ''; // fallback so it won’t fatal
-} else {
-    $PluginResultversions = wp_remote_retrieve_body( $PluginResponseversions );
-}
-
-      
-
-      if(!isset($PluginResultversions) || is_wp_error($PluginResultversions))
-      {
-          echo '<center><h2>Please Reload The Page Again</h2></center>';
-      }
-      $pluginobjversion = json_decode($PluginResultversions, true);
-    
-   
-    
-      if (!isset($pluginobjversion['error']))
-                  { 
-                   
-                   $stat=$pluginobjversion['status'];  
-                     
-                     
-                     
-                      if(isset($pluginobjversion['reports']) && isset($pluginobjversion['reports']['phpcs_phpcompatibilitywp']['report']['compatible']))
-                     {
-                 $compatibleVersions = $pluginobjversion['reports']['phpcs_phpcompatibilitywp']['report']['compatible'];
-            
-          
-              
-         $destination_array = '';
-
-foreach ($compatibleVersions as $index => $value) {
-    $destination_array .= $value;
-
-    if ($index < count($compatibleVersions) - 1) {
-        $destination_array .= ', ';
-    }
-}
-
-
-}
- 
- if(!isset($destination_array) || $destination_array == '' || $stat == '404' || $PluginLastestVerion == 'No Data')
-             {
-                 $destination_array= 'No Data';
-             }
-
-
-                  }
-
-   
-            
-
-
-	  
-	  
-        echo '<tbody class="tbdy" style="background-color:'.$trowcolor.'">
-        <tr>
-        <th scope="row">'.$PluginName.'</th>
-        <td>'.$PluginCurrentVersion.'</td>
-        <td>'.$PluginLastestVerion.'</td>
-        <td>'.$TestuptoVersion.'</td>
-        <td>'.$destination_array.'</td>
-        
-        <td>'.$plugstats.'</td>
-        <td>'.$Upgradeable.'</td>
-        <td>'.str_replace(":","",$numberofcases).'</td>
-        </tr>';
-		    $loop = $loop + 1; 
-		    
-		 
-		 
-	    // Creating Array to export data to excel	 
-		 $storearray[] = array(
-        'Plugin Name' => str_replace(","," ",$PluginName),
-        'Current Plugin Version' => $PluginCurrentVersion,
-        'Lastest Plugin Version' => $PluginLastestVerion,
-        'Compatible With WordPress Version' => $TestuptoVersion,
-        'Supported PHP Version' => str_replace(","," ",$destination_array),
-        'Plugin Status' => $plugstats,
-        'Updateable With Latest Version of WordPress' => $Upgradeable,
-        'Issues Resolved in Last Two Months' => "'".str_replace(":","",$numberofcases)
-    );
-    
-    
-    }
-        echo '</tbody>
-        </table> </div>';
-  
-
-    
-  ?> <script>
-  // Passing the PHP value to JavaScript
-  var Number_Of_plugin_activate_flag = 
-  <?php echo $Number_Of_plugin_activate_flag; ?>;
-  
-  // Setting the value in the HTML
-  document.getElementById("pluginCountValue").textContent = Number_Of_plugin_activate_flag;
-  
-  
-   // Passing the PHP value to JavaScript
-  var Number_Of_plugin_deactivate_flag = 
-  <?php echo $Number_Of_plugin_deactivate_flag; ?>;
-  
-  // Setting the value in the HTML
-  document.getElementById("pluginCountValueinactive").textContent = Number_Of_plugin_deactivate_flag;
-</script>
-    <?php
-echo '<br><b>Note:- The Plugin which are showing No Data that are not found on wordpress org as they may be Custom Plugin or licenced Plugin so please check it with the Author or from the website you have buyed, that is there lastest version avaibale for the plugin.<b><br><br><b>After Analysis Of Above Plugin Please Update the WordPress Accordingly.</b>';
-
-?>
-<script>
-document.getElementById('exportButton').addEventListener('click', function() {
-    // Example array data
-    var dataArray = <?php echo wp_json_encode($storearray); ?>;
-    
-    // Convert the array data to CSV format
-    var csvContent = "data:text/csv;charset=utf-8,";
-    
-    // Construct the header row
-    var headerRow = Object.keys(dataArray[0]).join(",");
-    csvContent += headerRow + "\r\n";
-    
-    // Iterate over each object in the array
-    dataArray.forEach(function(rowObject) {
-        // Construct each row of data
-        var row = Object.values(rowObject).join(",");
-        csvContent += row + "\r\n";
-    });
-    
-    // Create a link element and trigger a click event to initiate download
-    var encodedUri = encodeURI(csvContent);
-    var link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "export.csv");
-    document.body.appendChild(link); // Required for Firefox
-    link.click();
-});
-</script>
-
-
-
-
-<?php
-
-
-
-
-}  
-}}
 new PCC();
+
+endif;
