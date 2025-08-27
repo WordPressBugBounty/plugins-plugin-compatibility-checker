@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Plugin Compatibility Checker
  * Description: Check which WordPress and PHP versions your plugins are compatible with before updating WordPress. Adds caching and a Rescan button.
- * Version: 5.0.2
+ * Version: 5.0.3
  * Author: Dinesh Pilani
  * Author URI: https://www.linkedin.com/in/dineshpilani/
  */
