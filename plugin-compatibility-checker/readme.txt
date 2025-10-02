@@ -1,54 +1,69 @@
 === Plugin Compatibility Checker ===
-Contributors: Dinesh Pilani
-Tags: Plugin Compatibility Checker, Plugin, Management, Version, checker, compatibility, php, PHP Compatibility Checker
-Requires at least: 4.0.1
+Contributors: CompatShield
+Tags: compatibility, plugin checker, php version, security, vulnerabilities
+Requires at least: 5.0
 Tested up to: 6.8
-Requires PHP: 5.6
-Stable tag: 5.0.3
+Requires PHP: 7.2
+Stable tag: 6.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-A Simple plugin to check the Plugin Compatibility with the Latest Stable version of WordPress
+Scan and check your plugins for PHP and WordPress compatibility, with vulnerability insights available via the Portal Dashboard.
 
 == Description ==
-A Plugin Compatibility Checker is vital for WordPress users to ensure seamless updates. It offers a comprehensive system overview, including RAM usage and disk space availability, allowing users to gauge compatibility with upcoming updates. By comparing plugin versions and indicating update status, it streamlines the update process. With the ability to export data for analysis, it's an essential tool for maintaining a stable WordPress ecosystem.
+
+The **Plugin Compatibility Checker** helps you keep your WordPress site stable and secure by scanning installed plugins for PHP and WordPress version compatibility. It also alerts you about known plugin vulnerabilities (available via the Portal Dashboard).
+
+Free scans are powered by [Tide](https://wptide.org), an open-source project that analyzes plugins and themes for PHP compatibility. This ensures you always have basic compatibility data, even without a license.
+
+With a valid license, you unlock advanced compatibility checks up to PHP 8.4, email notifications, and vulnerability insights via the CompatShield Portal.
 
 ### ✨ Key Features ###
 
-* **System Information Overview** - Easily access vital system metrics, including installed libraries, RAM usage, disk space availability, and more. Empower yourself with crucial insights into your system's health, allowing you to gauge compatibility with upcoming WordPress updates effortlessly.
-* **Plugin Version Comparison** - Instantly compare your installed plugin versions with the latest releases, ensuring you're up-to-date and compatible with the latest WordPress version.
-* **Update Status Indicator** - Quickly identify which plugins are ready for update and which ones require attention before proceeding with WordPress updates.
-* **User-Friendly Interface** - Navigate and utilize the plugin's functionalities effortlessly, making the compatibility checking process a breeze.
+* **PHP Compatibility Check** – Scan plugins for PHP compatibility.  
+  - Free version: Results come from [Tide](https://wptide.org), up to PHP 8.0  
+  - Licensed version: CompatShield Portal results, up to PHP 8.4  
 
-### ✨ New Features ###
+* **Plugin Rescan** – Quickly rescan whenever you install or update plugins.  
 
-* **Multisite** - Plugin Supports Multisite.
+* **Email Notifications** – Get notified when scans are completed (licensed only).  
 
+* **Portal Integration** – View full scan results in the CompatShield Portal.  
 
-### ✨ List of ALL Features ###
-1. Display all the Information of Plugin at one page 
-2. Plugin Current Version Check
-3. Plugin Latest Release Version Check
-4. Compatible With WordPress Version
-5. Plugin Ready to Update Or Not
-6. Filter to check plugin activated or not
-7. Display Total Number of Issues Resolved in Last Two Months
-8. Display Count of Total Number of Plugin Installed
-9. Displayed Count of  Total Number of Plugin Activate or Deactivate
-10. Display all the supported php version for plugin 
-11. Export data to excel 
-12. Display System Info
+* **Vulnerability Alerts** – Vulnerability data is only available in the Portal Dashboard (licensed users).  
 
-**This plugin relies on [Tide](https://wptide.org) that scans updated versions of plugins and shows which version of php is supported.**
+* **“No Data” Plugins Handling** – Easily identify custom/premium plugins or removed versions not available on WordPress.org.  
+
+### 🔑 Free vs Licensed ###
+
+| Feature                     | Free Version (Tide)             | Licensed Version (Portal)                   |
+| --------------------------- | -------------------------------- | ------------------------------------------- |
+| PHP Compatibility Check     | Up to PHP 8.0 via Tide           | Up to PHP 8.4 via CompatShield Portal        |
+| Vulnerability Scan          | ✖                                | ✅ (in Portal Dashboard only)                |
+| Email Notifications         | ✖                                | ✅                                           |
+| Portal Dashboard            | ✖                                | Full access (compatibility + vulnerabilities)|
+| Custom/Premium Plugins Data | ✖                                | Partially supported (depends on availability)|
 
 == Screenshots ==
 
-1. The main plugin interface.
-2. Shows Activate Plugin.
-3. Shows Inactive Plugin
-4. Shows System Info
+1. The main plugin interface with scan results.  
+2. Example of plugins listed after rescan.  
+3. Fetching the latest results from the Portal.  
+4. Viewing compatibility and vulnerabilities (Portal).  
 
 == Installation ==
 
-1. Upload `plugin-compatibility-checker` to the `/wp-content/plugins/` directory
-2. Activate the plugin through the 'Plugins' menu in WordPress
+1. Upload `plugin-compatibility-checker` to the `/wp-content/plugins/` directory.  
+2. Activate the plugin through the **Plugins** menu in WordPress.  
+3. (Optional) Enter your license key in settings to unlock full features.  
+
+== Frequently Asked Questions ==
+
+= What happens if I don’t activate a license? =  
+You will only see compatibility results up to PHP 8.0, powered by [Tide](https://wptide.org). For PHP 8.4 results, email notifications, and vulnerability insights, you need a valid license.  
+
+= Why does a plugin show “No Data”? =  
+This usually means the plugin is either custom/premium or its version has been removed from WordPress.org.  
+
+= Do I need to rescan after adding new plugins? =  
+Yes, please click **Rescan** to include new plugins in the compatibility check.  
