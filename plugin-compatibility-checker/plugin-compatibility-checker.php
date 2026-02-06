@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Plugin Compatibility Checker (Portal-integrated)
  * Description: Check which WordPress and PHP versions your plugins are compatible with before updating WordPress.adds Portal integration: license settings, request scan, fetch latest result, cron poller, admin email on new results.
- * Version: 6.0
+ * Version: 7.0.4
  * Author: CompatShield
  * Author URI: https://www.compatshield.com/
  */
@@ -29,6 +29,8 @@ class PCC {
     const OPTION_REMOTE_MAP = 'pcc_remote_php_compat';
     const CRON_HOOK = 'pcc_cron_fetch_remote';
     const PORTAL_API = 'https://www.compatshield.com/portal-api';
+	const SIGNUP_URL  = 'https://www.compatshield.com/product';      // free plan signup
+    const PRODUCT_URL = 'https://www.compatshield.com/product/';    // pricing / pro
 
     public function __construct() {
         if ( is_multisite() ) {
@@ -700,6 +702,9 @@ $payload = [
     }
 
     private function render_dashboard($is_network = false) {
+		 $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false);
+		 $buy_link   = esc_url(self::PRODUCT_URL);
+		$signup_link = esc_url(self::SIGNUP_URL);
         $stats     = $this->get_environment_stats($is_network);
         $scan      = $this->get_scan_results(false, $is_network);
         $icons     = [
@@ -711,6 +716,17 @@ $payload = [
         ];
 
         echo '<h1 class="pluginheading">'.esc_html__('Check Your Plugin Compatibility', 'pcc').'</h1>';
+
+if ( ! $license_valid ) {
+    echo '<div class="notice" style="margin:12px 0;padding:14px;border-left:4px solid #135e96;background:#f7fbff;">
+            <strong>Unlock PHP 8.1–8.5 checks — only $1/month (subscription).</strong>
+            Subscribe for $1/month to get a CompatShield license key and view newer PHP compatibility in this dashboard.
+            &nbsp; <a class="button button-primary" href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $1/month </a>
+            &nbsp; <a class="button" href="'.$buy_link.'" target="_blank" rel="noopener">See Pro features</a>
+          </div>';
+}
+
+
 
         echo '<div class="stats-grid">';
         $this->stat_card($icons['wp'], 'WordPress', $stats['wp_version']);
@@ -729,7 +745,6 @@ $payload = [
         $settings_url = admin_url('admin.php?page=' . self::SUBMENU_SETTINGS_SLUG);
         $license = trim(get_option(self::OPTION_LICENSE_KEY, ''));
         $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false); 
-        $buy_link = esc_url('https://www.compatshield.com/product/');
         $remote_map = get_option(self::OPTION_REMOTE_MAP, []);
         if ( ! is_array($remote_map) ) $remote_map = [];
 
@@ -754,13 +769,26 @@ $payload = [
 
         echo '<hr />';
         echo '<h2>'.esc_html__('Local Plugin Compatibility Summary', 'pcc').'</h2>';
-        echo '<p>'.esc_html__('Local scan table (kept as before) — use Rescan button to request a fresh scan on Portal (if validated license) or refresh local results (fallback). Use "Fetch latest result" to pull Portal output when available.', 'pcc').'</p>';
+     
+	 if ( $license_valid ) {
+    echo '<p style="color:#155724;font-weight:500;">
+        The results you are viewing are fetched directly from the CompatShield Portal because your license is active.
+        These include advanced PHP compatibility checks (PHP 8.1–8.5).
+    </p>';
+} else {
+    echo '<p>'.esc_html__(
+        'This table uses WPTide data until you validate a CompatShield license. Subscribe to the $1/month entry plan (recurring) to unlock Portal results (PHP 8.1–8.5). Use "Rescan" to request a fresh Portal scan (when licensed) or refresh WPTide (when not). Use "Fetch latest result" to pull Portal output when available.',
+        'pcc'
+    ).'</p>';
+}
 
+	 
+	 
         $this->render_dashboard_table_only();
 
         $notice_text = $license_valid
-            ? 'Portal mode — validated license active (remote results available or scanable)'
-            : 'Fallback mode — using WPTide local results (compatibility data limited to PHP ≤ 8.0). <a href="'.$buy_link.'" target="_blank" rel="noopener">Purchase a Portal license</a> to view compatibility beyond PHP 8.0.';
+    ? 'Portal mode — license validated. Showing CompatShield results (includes PHP 8.1–8.5).'
+    : 'WPTide mode — showing community results (limited to PHP ≤ 8.0). <a href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $1/month </a> to enable CompatShield results (PHP 8.1–8.5).';
 
         // Inline JS: set mode notice + auto-fetch remote when license_valid and remote map empty
         $pcc_settings_nonce = wp_create_nonce('pcc_settings_nonce');
@@ -872,7 +900,9 @@ $payload = [
 
         $license = esc_attr(get_option(self::OPTION_LICENSE_KEY, ''));
         $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false);
-        $buy_link = esc_url('https://www.compatshield.com/');
+        $buy_link   = esc_url(self::PRODUCT_URL);
+		$signup_link = esc_url(self::SIGNUP_URL);
+
 
         ?>
         <div class="wrap">
@@ -885,8 +915,15 @@ $payload = [
                         <th scope="row"><label for="pcc_license_key">Portal License Key</label></th>
                         <td>
                             <input type="text" id="pcc_license_key" name="pcc_license_key" value="<?php echo $license; ?>" class="regular-text" />
-                            <p class="description">Enter your license to fetch remote results. Without a validated license, the plugin will fallback to WPTide per-plugin PHP compatibility (limited to PHP &le; 8.0).</p>
-                        </td>
+<p class="description">
+   Enter your CompatShield license key to enable Portal mode.
+Without a validated license, the plugin uses WPTide data limited to PHP ≤ 8.0.
+With a validated license (entry plan $1/month or Pro), CompatShield shows newer PHP compatibility (8.1–8.5) right in your dashboard.
+Don’t have a key? <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe for $1/month </a>.
+
+</p>
+                        
+						</td>
                     </tr>
                 </table>
                 <p class="submit"><input type="submit" name="pcc_save_settings" id="submit" class="button button-primary" value="Save Settings"></p>
@@ -903,20 +940,49 @@ $payload = [
             </p>
 
             <p style="margin-top:8px;">
-                <?php if (! $license_valid && $license) : ?>
-                    <em style="color:#856404;">Saved license not validated. Click <strong>Validate License</strong> to enable Portal mode.</em>
-                <?php elseif (! $license) : ?>
-                    <em style="color:#b71c1c;">No license configured — using fallback WPTide results (limited to PHP ≤ 8.0). <a href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">Buy a license</a>.</em>
-                <?php else: ?>
-                    <em style="color:#155724;">License validated — Portal mode enabled.</em>
-                <?php endif; ?>
+               <?php if (! $license_valid && $license) : ?>
+    <em style="color:#856404;">Saved license not validated yet. Click <strong>Validate License</strong> to enable Portal mode.</em>
+<?php elseif (! $license) : ?>
+    <em style="color:#b71c1c;">No license configured — using WPTide results (PHP ≤ 8.0). <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $1/month </a> or <a href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">upgrade to Pro</a>.</em>
+<?php else: ?>
+    <em style="color:#155724;">License validated — Portal mode enabled (PHP 8.1–8.5 shown).</em>
+<?php endif; ?>
             </p>
+			
+			
+			<div style="margin-top:12px;padding:14px;border:1px solid #e5e5e5;border-radius:6px;background:#fafafa;">
+    <strong>No license yet?</strong>
+<a class="button button-primary" href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $1/month </a>
+&nbsp; or &nbsp;
+<a class="button" href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">View Pro </a>
+<div style="margin-top:6px;color:#555;">The $1 entry plan unlocks PHP 8.1–8.5 compatibility visibility via the Portal. Pro adds deeper summaries and recommendations.</div>
+
+</div>
+
 
             <hr />
 
             <p><em><?php esc_html_e('Use the main "Plugin Compatibility Checker" menu item to view the local compatibility table and dashboard. Settings page only manages portal/license and remote actions.', 'pcc'); ?></em></p>
 
-<p><em><?php esc_html_e('Use the User-Guide(https://www.compatshield.com/user-guide/) if you face any issue after license activation or you can raise a ticket or mail at support@compatshield.com.', 'pcc'); ?></em></p>
+<p><em><?php esc_html_e('Use the User-Guide if you face any issue after license activation or you can raise a ticket or mail at support@compatshield.com.', 'pcc'); ?></em></p>
+
+<p><a href="https://www.compatshield.com/user-guide/" target="_blank"><strong><?php esc_html_e('Open Full User Guide', 'pcc'); ?></strong></a></p>
+
+<!-- YouTube Video Tutorial -->
+<div style="margin-top:15px; margin-bottom:25px;">
+<iframe width="100%" height="350" src="https://www.youtube.com/embed/PCxhJmO-Tb4" frameborder="0" allowfullscreen></iframe>
+</div>
+
+<!-- Quick Steps Summary -->
+<p><strong><?php esc_html_e('Quick Steps:', 'pcc'); ?></strong></p>
+<ol style="margin-left:20px;">
+    <li><?php esc_html_e('Login to Portal Dashboard → Add your domain inside License tab', 'pcc'); ?></li>
+    <li><?php esc_html_e('Copy your License Key from Portal', 'pcc'); ?></li>
+    <li><?php esc_html_e('Paste License Key inside Plugin settings here', 'pcc'); ?></li>
+    <li><?php esc_html_e('Click Validate License', 'pcc'); ?></li>
+    <li><?php esc_html_e('Click Save Settings', 'pcc'); ?></li>
+    <li><?php esc_html_e('Click Rescan on main scan page to fetch plugins', 'pcc'); ?></li>
+</ol>
 
         </div>
 
@@ -947,7 +1013,7 @@ $payload = [
                     <th scope="col">'.esc_html__('Current Plugin Version', 'pcc').'</th>
                     <th scope="col">'.esc_html__('Latest Plugin Version', 'pcc').'</th>
                     <th scope="col">'.esc_html__('Compatible With WordPress Version', 'pcc').'</th>
-                    <th scope="col">'.esc_html__('Supported PHP Version', 'pcc').'</th>
+                    <th scope="col">'.esc_html__('PHP Supported (WPTide: ≤8.0 • Portal: 8.1–8.5)', 'pcc').'</th>
                     <th scope="col">'.esc_html($is_network ? 'Plugin Network Status' : 'Plugin Status').'</th>
                     <th scope="col">'.esc_html__('Updateable With Latest Version of WordPress', 'pcc').'</th>
                     <th scope="col">'.esc_html__('Issues Resolved in Last Two Months', 'pcc').'</th>

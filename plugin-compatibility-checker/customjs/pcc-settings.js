@@ -1,7 +1,6 @@
 /* customjs/pcc-settings.js
  * Unified rescan behavior + mode notice updates.
  * Uses PCCSettings.licenseActive (localized by PHP) to show initial mode.
- *
  * Fix: when server returns non-2xx with JSON body (e.g. license_invalid),
  * parse the response JSON in .fail() and show the portal message instead
  * of "Network error...".
