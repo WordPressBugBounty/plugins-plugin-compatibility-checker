@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Plugin Compatibility Checker (Portal-integrated)
  * Description: Check which WordPress and PHP versions your plugins are compatible with before updating WordPress.adds Portal integration: license settings, request scan, fetch latest result, cron poller, admin email on new results.
- * Version: 7.0.4
+ * Version: 7.0.5
  * Author: CompatShield
  * Author URI: https://www.compatshield.com/
  */
