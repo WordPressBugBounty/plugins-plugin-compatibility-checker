@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Plugin Compatibility Checker (Portal-integrated)
  * Description: Check which WordPress and PHP versions your plugins are compatible with before updating WordPress.adds Portal integration: license settings, request scan, fetch latest result, cron poller, admin email on new results.
- * Version: 7.0.5
+ * Version: 7.0.6
  * Author: CompatShield
  * Author URI: https://www.compatshield.com/
  */
@@ -29,7 +29,7 @@ class PCC {
     const OPTION_REMOTE_MAP = 'pcc_remote_php_compat';
     const CRON_HOOK = 'pcc_cron_fetch_remote';
     const PORTAL_API = 'https://www.compatshield.com/portal-api';
-	const SIGNUP_URL  = 'https://www.compatshield.com/product';      // free plan signup
+    const SIGNUP_URL  = 'https://www.compatshield.com/product';      // free plan signup
     const PRODUCT_URL = 'https://www.compatshield.com/product/';    // pricing / pro
 
     public function __construct() {
@@ -139,94 +139,109 @@ JS;
         }
     }
 
-    
-   /* Server-side helper: validate license against portal validate endpoint */
-/* Server-side helper: validate license against portal validate endpoint */
-private function server_validate_license($license, $site_url = '') {
-    if ( empty($license) ) return new WP_Error('missing_license', 'Missing license');
+    /* Server-side helper: validate license against portal validate endpoint */
+    private function server_validate_license($license, $site_url = '') {
+        if ( empty($license) ) return new WP_Error('missing_license', 'Missing license');
 
-    // normalize license
-    $license = trim($license);
+        $license = trim($license);
 
-    // normalize site_url to host-only (example.com). Fallback to get_site_url()
-    $site_raw = trim($site_url ?: get_site_url());
-    $host = parse_url($site_raw, PHP_URL_HOST);
-    if ( ! $host ) {
-        // maybe get_site_url returned a host-less value; try adding scheme then parse
-        $tmp = @parse_url('https://' . ltrim($site_raw, '/'));
-        $host = $tmp ? ($tmp['host'] ?? '') : '';
-    }
-    $site_to_send = $host ? trim(strtolower($host)) : trim($site_raw);
+        $site_raw = trim($site_url ?: get_site_url());
+        $host = parse_url($site_raw, PHP_URL_HOST);
+        if ( ! $host ) {
+            $tmp = @parse_url('https://' . ltrim($site_raw, '/'));
+            $host = $tmp ? ($tmp['host'] ?? '') : '';
+        }
+        $site_to_send = $host ? trim(strtolower($host)) : trim($site_raw);
 
-    $validate_url = rtrim(self::PORTAL_API, '/') . '/validate_license.php';
+        $validate_url = rtrim(self::PORTAL_API, '/') . '/validate_license.php';
 
-    $payload = [
-        'site_url' => $site_to_send,
-        'license'  => $license,
-    ];
+        $payload = [
+            'site_url' => $site_to_send,
+            'license'  => $license,
+        ];
 
-    $args = [
-        'headers' => [
-            'X-Portal-License' => $license,
-            'Content-Type'     => 'application/json',
-        ],
-        'timeout' => 10,
-        'body'    => wp_json_encode($payload),
-    ];
+        $args = [
+            'headers' => [
+                'X-Portal-License' => $license,
+                'Content-Type'     => 'application/json',
+            ],
+            'timeout' => 10,
+            'body'    => wp_json_encode($payload),
+        ];
 
-    // Optional debug logging (only when WP_DEBUG enabled)
-    if ( defined('WP_DEBUG') && WP_DEBUG ) {
-        error_log('[PCC] validate_license -> POST ' . $validate_url . ' payload=' . wp_json_encode($payload));
-    }
+        if ( defined('WP_DEBUG') && WP_DEBUG ) {
+            error_log('[PCC] validate_license -> POST ' . $validate_url . ' payload=' . wp_json_encode($payload));
+        }
 
-    $res = wp_remote_post($validate_url, $args);
-    if ( is_wp_error($res) ) return $res;
+        $res = wp_remote_post($validate_url, $args);
+        if ( is_wp_error($res) ) return $res;
 
-    $code = wp_remote_retrieve_response_code($res);
-    $body = wp_remote_retrieve_body($res);
-    $json = json_decode($body, true);
+        $code = wp_remote_retrieve_response_code($res);
+        $body = wp_remote_retrieve_body($res);
+        $json = json_decode($body, true);
 
-    if ( defined('WP_DEBUG') && WP_DEBUG ) {
-        error_log('[PCC] validate_license response_code=' . $code . ' body=' . $body);
-    }
+        if ( defined('WP_DEBUG') && WP_DEBUG ) {
+            error_log('[PCC] validate_license response_code=' . $code . ' body=' . $body);
+        }
 
-    // Only treat as success if HTTP 2xx AND JSON contains valid === true
-    if ( $code >= 200 && $code < 300 && is_array($json) && isset($json['valid']) && $json['valid'] === true ) {
-        return $json;
-    }
+        if ( $code >= 200 && $code < 300 && is_array($json) && isset($json['valid']) && $json['valid'] === true ) {
+            return $json;
+        }
 
-    // If portal explicitly returned valid=false return a WP_Error with portal details
-    if ( is_array($json) && isset($json['valid']) && $json['valid'] === false ) {
-        return new WP_Error('license_invalid', 'License not valid', ['portal' => $json, 'http_code' => $code, 'body' => $body]);
+        if ( is_array($json) && isset($json['valid']) && $json['valid'] === false ) {
+            return new WP_Error('license_invalid', 'License not valid', ['portal' => $json, 'http_code' => $code, 'body' => $body]);
+        }
+
+        return new WP_Error('invalid_response', 'License validation failed', ['http_code' => $code, 'body' => $body, 'json' => $json]);
     }
 
-    // else unknown / malformed response
-    return new WP_Error('invalid_response', 'License validation failed', ['http_code' => $code, 'body' => $body, 'json' => $json]);
-}
-
-/**
- * Normalize a site URL to host-only (example.com or sub.example.com).
- * Returns host (lowercased) or the fallback input if parse fails.
- */
-private function normalize_site_host($site_raw = '') {
-    $site_raw = trim($site_raw ?: get_site_url());
-    // Try WordPress helper first (if present)
-    if ( function_exists('wp_parse_url') ) {
-        $host = wp_parse_url($site_raw, PHP_URL_HOST);
-    } else {
-        $parts = @parse_url($site_raw);
-        $host = $parts['host'] ?? null;
+    /**
+     * Get full DB version string using SELECT VERSION().
+     * Returns the raw string e.g. "8.0.32" or "10.6.14-MariaDB".
+     * Use this instead of $wpdb->db_version() which strips the MariaDB suffix.
+     */
+    private function get_db_version() {
+        global $wpdb;
+        $full = $wpdb->get_var('SELECT VERSION()');
+        return $full ?: 'unknown';
     }
-    if ( ! $host ) {
-        // try adding https:// and parse again
-        $tmp = @parse_url('https://' . ltrim($site_raw, '/'));
-        $host = $tmp ? ($tmp['host'] ?? null) : null;
+
+    /**
+     * Parse the full DB version string into type and clean version number.
+     * Returns array: ['type' => 'MySQL'|'MariaDB', 'clean' => '8.0.32', 'full' => '8.0.32-log']
+     */
+    private function parse_db_version($full_db = '') {
+        if ( empty($full_db) || $full_db === 'unknown' ) {
+            return [ 'type' => 'MySQL', 'clean' => 'unknown', 'full' => 'unknown' ];
+        }
+        $is_maria = stripos($full_db, 'mariadb') !== false;
+        $clean    = preg_replace('/[^0-9.].*$/', '', $full_db);
+        return [
+            'type'  => $is_maria ? 'MariaDB' : 'MySQL',
+            'clean' => $clean,
+            'full'  => $full_db,
+        ];
     }
-    return $host ? strtolower(trim($host)) : trim($site_raw);
-}
 
+    /**
+     * Normalize a site URL to host-only (example.com or sub.example.com).
+     */
+    private function normalize_site_host($site_raw = '') {
+        $site_raw = trim($site_raw ?: get_site_url());
+        if ( function_exists('wp_parse_url') ) {
+            $host = wp_parse_url($site_raw, PHP_URL_HOST);
+        } else {
+            $parts = @parse_url($site_raw);
+            $host = $parts['host'] ?? null;
+        }
+        if ( ! $host ) {
+            $tmp = @parse_url('https://' . ltrim($site_raw, '/'));
+            $host = $tmp ? ($tmp['host'] ?? null) : null;
+        }
+        return $host ? strtolower(trim($host)) : trim($site_raw);
+    }
 
-    /* AJAX: Rescan (now requests a scan when portal license validated) */
+    /* AJAX: Rescan */
     public function ajax_rescan() {
         check_ajax_referer(self::NONCE_ACTION, 'nonce');
 
@@ -234,65 +249,75 @@ private function normalize_site_host($site_raw = '') {
             return wp_send_json_error(['message'=>'forbidden'], 403);
         }
 
-        // Always clear cached local scan results (we'll rebuild after actions)
         if ( is_multisite() ) delete_site_transient(self::TRANSIENT_KEY);
         else delete_transient(self::TRANSIENT_KEY);
 
         $license = trim(get_option(self::OPTION_LICENSE_KEY, ''));
         $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false);
 
-        // If no license configured -> clear remote mapping and perform local rebuild (fallback)
         if ( empty($license) ) {
-            // clear remote data to prevent stale portal results showing
             delete_option(self::OPTION_REMOTE_MAP);
             $this->get_scan_results(true);
             return wp_send_json_success(['from_remote'=>false,'updated'=>0,'scan_pending'=>false,'message'=>'no_license_fallback']);
         }
 
-        // If license present but not marked validated, attempt server-side validation now
         if ( ! $license_valid ) {
             $v = $this->server_validate_license($license, get_site_url());
             if ( is_wp_error($v) ) {
-                // invalid or network issue -> mark invalid, clear remote map and fall back
                 update_option(self::OPTION_LICENSE_VALID, false);
                 delete_option(self::OPTION_REMOTE_MAP);
                 $this->get_scan_results(true);
                 return wp_send_json_error(['message'=>'license_invalid_or_network','detail'=>$v->get_error_message()], 401);
             } else {
-                // valid -> persist and continue
                 update_option(self::OPTION_LICENSE_KEY, $license);
                 update_option(self::OPTION_LICENSE_VALID, true);
                 $license_valid = true;
             }
         }
 
-        // From here, license is present and validated: submit request to portal
-        $endpoint = rtrim(self::PORTAL_API, '/') . '/receive_client.php';
-       $site_host = $this->normalize_site_host(get_site_url());
-$payload = [
-    'site_url'   => $site_host,
-    'wp_version' => get_bloginfo('version'),
-    'php_version'=> phpversion(),
-    'server_info'=> [
-        'os' => PHP_OS,
-        'sapi' => php_sapi_name(),
-    ],
-    'components' => $this->build_components_payload()
-];
+        $endpoint  = rtrim(self::PORTAL_API, '/') . '/receive_client.php';
+        $site_host = $this->normalize_site_host(get_site_url());
+
+        // Build DB info cleanly before constructing payload
+        $db_full    = $this->get_db_version();
+        $db_parsed  = $this->parse_db_version($db_full);
+
+        $payload = [
+            'site_url'   => $site_host,
+            'wp_version' => get_bloginfo('version'),
+            'php_version'=> phpversion(),
+            'server_info'=> [
+                'os'              => PHP_OS,
+                'sapi'            => php_sapi_name(),
+                'db_version'      => $db_parsed['clean'],
+                'db_type'         => $db_parsed['type'],
+                'db_version_full' => $db_parsed['full'],
+            ],
+            'components' => $this->build_components_payload(),
+        ];
 
         $args = [
             'headers' => [
-                'Content-Type' => 'application/json',
+                'Content-Type'     => 'application/json',
                 'X-Portal-License' => $license,
             ],
-            'body' => wp_json_encode($payload),
+            'body'    => wp_json_encode($payload),
             'timeout' => 20,
         ];
 
+        if ( defined('WP_DEBUG') && WP_DEBUG ) {
+            error_log('[PCC rescan] Payload sent: ' . wp_json_encode($payload));
+        }
+
         $res = wp_remote_post($endpoint, $args);
+
+        if ( defined('WP_DEBUG') && WP_DEBUG ) {
+            error_log('[PCC rescan] HTTP code: ' . wp_remote_retrieve_response_code($res));
+            error_log('[PCC rescan] Body: ' . wp_remote_retrieve_body($res));
+        }
+
         if ( is_wp_error($res) ) {
-            // network failed — still return success but mark not-from-remote
-            $this->get_scan_results(true); // rebuild local
+            $this->get_scan_results(true);
             return wp_send_json_success(['from_remote'=>false,'updated'=>0,'scan_pending'=>false,'remote_error'=>$res->get_error_message()]);
         }
 
@@ -300,9 +325,7 @@ $payload = [
         $body = wp_remote_retrieve_body($res);
         $json = json_decode($body, true);
 
-        // Portal accepted request (200/2xx)
         if ( $code >= 200 && $code < 300 ) {
-            // If portal included immediate results (status ok + scan_results), apply them now
             if ( is_array($json) && isset($json['status']) && $json['status'] === 'ok' && ! empty($json['scan_results']) ) {
                 $remote_map = get_option(self::OPTION_REMOTE_MAP, []);
                 if ( ! is_array($remote_map) ) $remote_map = [];
@@ -313,7 +336,6 @@ $payload = [
                     if ( empty($standards) || stripos($standards,'PHPCompatibilityWP') === false ) continue;
                     if ( empty($sr['slug']) ) continue;
 
-                    // normalise is_compatible
                     $is_compat = false;
                     if ( isset($sr['is_compatible']) ) {
                         $val = $sr['is_compatible'];
@@ -345,20 +367,16 @@ $payload = [
                     update_option(self::OPTION_REMOTE_MAP, $remote_map, false);
                     if ( is_multisite() ) delete_site_transient(self::TRANSIENT_KEY);
                     else delete_transient(self::TRANSIENT_KEY);
-
-                    // rebuild local scan results so UI reflects new mapping immediately
                     $this->get_scan_results(true);
                 }
 
                 return wp_send_json_success(['from_remote'=>true,'updated'=>$updated,'scan_pending'=>false,'portal_response'=>$json]);
             }
 
-            // default: portal accepted request and queued scan
             $this->get_scan_results(true);
             return wp_send_json_success(['from_remote'=>false,'updated'=>0,'scan_pending'=>true,'portal_response'=>$json]);
         }
 
-        // non-2xx => treat as error but still show local results
         $this->get_scan_results(true);
         return wp_send_json_error(['code'=>$code,'response'=>$json,'body'=>$body], 502);
     }
@@ -372,7 +390,6 @@ $payload = [
         $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false);
         if ( empty($license) ) return wp_send_json_error(['error'=>'no_license_configured','message'=>'License not configured']);
 
-        // validate license server-side if not already valid
         if ( ! $license_valid ) {
             $v = $this->server_validate_license($license, get_site_url());
             if ( is_wp_error($v) ) {
@@ -384,26 +401,33 @@ $payload = [
             }
         }
 
-        $endpoint = rtrim(self::PORTAL_API, '/') . '/receive_client.php';
-       $site_host = $this->normalize_site_host(get_site_url());
-$payload = [
-    'site_url'   => $site_host,
-    'wp_version' => get_bloginfo('version'),
-    'php_version'=> phpversion(),
-    'server_info'=> [
-        'os' => PHP_OS,
-        'sapi' => php_sapi_name(),
-    ],
-    'components' => $this->build_components_payload()
-];
+        $endpoint  = rtrim(self::PORTAL_API, '/') . '/receive_client.php';
+        $site_host = $this->normalize_site_host(get_site_url());
 
+        // Build DB info cleanly before constructing payload
+        $db_full   = $this->get_db_version();
+        $db_parsed = $this->parse_db_version($db_full);
+
+        $payload = [
+            'site_url'   => $site_host,
+            'wp_version' => get_bloginfo('version'),
+            'php_version'=> phpversion(),
+            'server_info'=> [
+                'os'              => PHP_OS,
+                'sapi'            => php_sapi_name(),
+                'db_version'      => $db_parsed['clean'],
+                'db_type'         => $db_parsed['type'],
+                'db_version_full' => $db_parsed['full'],
+            ],
+            'components' => $this->build_components_payload(),
+        ];
 
         $args = [
             'headers' => [
-                'Content-Type' => 'application/json',
+                'Content-Type'     => 'application/json',
                 'X-Portal-License' => $license,
             ],
-            'body' => wp_json_encode($payload),
+            'body'    => wp_json_encode($payload),
             'timeout' => 20,
         ];
 
@@ -417,7 +441,6 @@ $payload = [
         $json = json_decode($body, true);
 
         if ( $code >= 200 && $code < 300 ) {
-            // If portal returned immediate scan_results apply them (same logic as above)
             if ( is_array($json) && isset($json['status']) && $json['status'] === 'ok' && ! empty($json['scan_results']) ) {
                 $remote_map = get_option(self::OPTION_REMOTE_MAP, []);
                 if ( ! is_array($remote_map) ) $remote_map = [];
@@ -459,8 +482,6 @@ $payload = [
                     update_option(self::OPTION_REMOTE_MAP, $remote_map, false);
                     if ( is_multisite() ) delete_site_transient(self::TRANSIENT_KEY);
                     else delete_transient(self::TRANSIENT_KEY);
-
-                    // rebuild cached scan results so UI uses new mapping
                     $this->get_scan_results(true);
                 }
 
@@ -473,7 +494,7 @@ $payload = [
         }
     }
 
-    /* AJAX: Fetch Remote (ensure local cache rebuild when new results applied) */
+    /* AJAX: Fetch Remote */
     public function ajax_fetch_remote() {
         if ( ! current_user_can(self::CAP_SINGLE) ) wp_send_json_error('forbidden', 403);
         check_ajax_referer('pcc_settings_nonce', 'nonce');
@@ -488,40 +509,36 @@ $payload = [
         $scan_pending = ! empty($result['scan_pending']);
 
         if ( $updated > 0 ) {
-            // force rebuild so dashboard sees changes immediately
             $this->get_scan_results(true);
         }
 
         return wp_send_json_success(['ok'=>true, 'updated'=>$updated, 'scan_pending'=>$scan_pending]);
     }
 
-    /* AJAX: Validate license (unchanged aside from persistence) */
+    /* AJAX: Validate license */
     public function ajax_validate_license() {
-    if ( ! current_user_can(self::CAP_SINGLE) ) wp_send_json_error('forbidden', 403);
-    check_ajax_referer('pcc_settings_nonce', 'nonce');
+        if ( ! current_user_can(self::CAP_SINGLE) ) wp_send_json_error('forbidden', 403);
+        check_ajax_referer('pcc_settings_nonce', 'nonce');
 
-    $license = isset($_POST['license']) ? trim(sanitize_text_field($_POST['license'])) : get_option(self::OPTION_LICENSE_KEY, '');
-    $site_url = isset($_POST['site_url']) ? trim(sanitize_text_field($_POST['site_url'])) : get_site_url();
+        $license  = isset($_POST['license'])  ? trim(sanitize_text_field($_POST['license']))  : get_option(self::OPTION_LICENSE_KEY, '');
+        $site_url = isset($_POST['site_url']) ? trim(sanitize_text_field($_POST['site_url'])) : get_site_url();
 
-    if ( empty($license) ) {
-        update_option(self::OPTION_LICENSE_VALID, false);
-        return wp_send_json_error(['message'=>'missing_license'], 400);
+        if ( empty($license) ) {
+            update_option(self::OPTION_LICENSE_VALID, false);
+            return wp_send_json_error(['message'=>'missing_license'], 400);
+        }
+
+        $v = $this->server_validate_license($license, $site_url);
+        if ( is_wp_error($v) ) {
+            update_option(self::OPTION_LICENSE_VALID, false);
+            $err_data = $v->get_error_data();
+            return wp_send_json_error(['message'=>'validate_failed','detail'=>$v->get_error_message(),'detail_data'=>$err_data], 502);
+        }
+
+        update_option(self::OPTION_LICENSE_KEY, $license);
+        update_option(self::OPTION_LICENSE_VALID, true);
+        return wp_send_json_success(['message'=>'license_valid','response'=>$v]);
     }
-
-    $v = $this->server_validate_license($license, $site_url);
-    if ( is_wp_error($v) ) {
-        update_option(self::OPTION_LICENSE_VALID, false);
-        // include portal data when present for debugging/UI
-        $err_data = $v->get_error_data();
-        return wp_send_json_error(['message'=>'validate_failed','detail'=>$v->get_error_message(),'detail_data'=>$err_data], 502);
-    }
-
-    // $v should be the parsed portal JSON and (by server_validate_license) must have valid === true
-    update_option(self::OPTION_LICENSE_KEY, $license);
-    update_option(self::OPTION_LICENSE_VALID, true);
-    return wp_send_json_success(['message'=>'license_valid','response'=>$v]);
-}
-
 
     /* Cron scheduling */
     public function maybe_schedule_cron() {
@@ -539,7 +556,7 @@ $payload = [
         $this->fetch_and_apply_remote_results(true);
     }
 
-    /* Fetch & apply remote mapping (returns array with scan_pending flag) */
+    /* Fetch & apply remote mapping */
     protected function fetch_and_apply_remote_results($is_cron=false) {
         $license = trim(get_option(self::OPTION_LICENSE_KEY, ''));
         $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false);
@@ -549,14 +566,14 @@ $payload = [
         }
 
         $fetch_url = rtrim(self::PORTAL_API, '/') . '/fetch_data.php';
-        $payload = [ 'site_url' => $this->normalize_site_host(get_site_url()) ];
+        $payload   = [ 'site_url' => $this->normalize_site_host(get_site_url()) ];
 
         $args = [
             'headers' => [
-                'Content-Type' => 'application/json',
+                'Content-Type'     => 'application/json',
                 'X-Portal-License' => $license,
             ],
-            'body' => wp_json_encode($payload),
+            'body'    => wp_json_encode($payload),
             'timeout' => 20,
         ];
 
@@ -567,7 +584,6 @@ $payload = [
         $body = wp_remote_retrieve_body($res);
         $json = json_decode($body, true);
 
-        // If portal didn't return OK (or empty scan_results), treat as pending
         if ( ! is_array($json) || ! isset($json['status']) || $json['status'] !== 'ok' ) {
             return [ 'updated' => 0, 'scan_pending' => true ];
         }
@@ -579,18 +595,14 @@ $payload = [
         $new_map = $remote_map;
 
         if ( isset($json['scan_results']) && is_array($json['scan_results']) && count($json['scan_results']) > 0 ) {
-            // aggregate multiple rows per slug into a single comma-separated list
-            $acc = []; // slug => array of versions
+            $acc = [];
 
             foreach ( $json['scan_results'] as $sr ) {
                 $standards = $sr['standards'] ?? null;
-                if ( empty($standards) || stripos($standards,'PHPCompatibilityWP') === false ) {
-                    continue;
-                }
+                if ( empty($standards) || stripos($standards,'PHPCompatibilityWP') === false ) continue;
                 if ( empty($sr['slug']) ) continue;
                 $slug = $sr['slug'];
 
-                // Normalise is_compatible (support ints, strings, booleans)
                 $is_compat = false;
                 if ( isset($sr['is_compatible']) ) {
                     $val = $sr['is_compatible'];
@@ -611,7 +623,6 @@ $payload = [
                 }
             }
 
-            // merge accumulations into new_map, dedupe and sort
             foreach ($acc as $slug => $ver_list) {
                 $ver_list = array_values(array_unique($ver_list));
                 usort($ver_list, 'version_compare');
@@ -642,7 +653,7 @@ $payload = [
         return [ 'updated' => $updated, 'scan_pending' => false ];
     }
 
-    /* UI renderers (table colors reverted) */
+    /* UI renderers */
     private function stat_card($icon_url, $title, $value_html) {
         echo '<div class="stat-card" style="display:inline-block;margin:8px;padding:18px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,0.06);width:180px;text-align:center;vertical-align:top;background:#fff;">';
         if ($icon_url) {
@@ -655,33 +666,32 @@ $payload = [
         echo '</div>';
     }
 
-    /* Build payload for portal: include currently installed plugins + active theme */
+    /* Build payload for portal */
     protected function build_components_payload() {
-        $plugins = get_plugins(); // installed plugins
+        $plugins = get_plugins();
         $out = [];
 
         foreach ( $plugins as $file => $info ) {
-            // skip if main plugin file does not exist in plugins directory (handles removed files)
             $candidate = WP_PLUGIN_DIR . '/' . $file;
             if ( ! file_exists($candidate) ) continue;
 
             $slug = $this->resolve_plugin_slug($file, $info['TextDomain'] ?? '', $info['PluginURI'] ?? '');
             $out[] = [
-                'type' => 'plugin',
-                'slug' => $slug ?: basename(dirname($file)),
-                'name' => $info['Name'] ?? $file,
+                'type'    => 'plugin',
+                'slug'    => $slug ?: basename(dirname($file)),
+                'name'    => $info['Name'] ?? $file,
                 'version' => $info['Version'] ?? '',
-                'source' => 'wporg',
+                'source'  => 'wporg',
             ];
         }
 
         $theme = wp_get_theme();
         $out[] = [
-            'type' => 'theme',
-            'slug' => $theme->get_stylesheet(),
-            'name' => $theme->get('Name'),
+            'type'    => 'theme',
+            'slug'    => $theme->get_stylesheet(),
+            'name'    => $theme->get('Name'),
             'version' => $theme->get('Version'),
-            'source' => 'wporg',
+            'source'  => 'wporg',
         ];
 
         return $out;
@@ -702,14 +712,15 @@ $payload = [
     }
 
     private function render_dashboard($is_network = false) {
-		 $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false);
-		 $buy_link   = esc_url(self::PRODUCT_URL);
-		$signup_link = esc_url(self::SIGNUP_URL);
-        $stats     = $this->get_environment_stats($is_network);
-        $scan      = $this->get_scan_results(false, $is_network);
-        $icons     = [
+        $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false);
+        $buy_link      = esc_url(self::PRODUCT_URL);
+        $signup_link   = esc_url(self::SIGNUP_URL);
+        $stats         = $this->get_environment_stats($is_network);
+        $scan          = $this->get_scan_results(false, $is_network);
+        $icons         = [
             'wp'       => plugins_url('icons/wordpress.png', __FILE__),
             'php'      => plugins_url('icons/php.png', __FILE__),
+            'db'       => plugins_url('icons/database-storage.png', __FILE__),
             'plug'     => plugins_url('icons/plug.png', __FILE__),
             'active'   => plugins_url('icons/check-mark.png', __FILE__),
             'inactive' => plugins_url('icons/multiplication.png', __FILE__),
@@ -717,35 +728,71 @@ $payload = [
 
         echo '<h1 class="pluginheading">'.esc_html__('Check Your Plugin Compatibility', 'pcc').'</h1>';
 
-if ( ! $license_valid ) {
-    echo '<div class="notice" style="margin:12px 0;padding:14px;border-left:4px solid #135e96;background:#f7fbff;">
-            <strong>Unlock PHP 8.1–8.5 checks — only $1/month (subscription).</strong>
-            Subscribe for $1/month to get a CompatShield license key and view newer PHP compatibility in this dashboard.
-            &nbsp; <a class="button button-primary" href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $1/month </a>
-            &nbsp; <a class="button" href="'.$buy_link.'" target="_blank" rel="noopener">See Pro features</a>
-          </div>';
-}
+        if ( ! $license_valid ) {
+            echo '<div class="notice" style="margin:12px 0;padding:14px;border-left:4px solid #135e96;background:#f7fbff;">
+                    <strong>Unlock PHP 8.1–8.5 checks — only $1/month (subscription).</strong>
+                    Subscribe for $1/month to get a CompatShield license key and view newer PHP compatibility in this dashboard.
+                    &nbsp; <a class="button button-primary" href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $1/month </a>
+                    &nbsp; <a class="button" href="'.$buy_link.'" target="_blank" rel="noopener">See Pro features</a>
+                  </div>';
+        }
 
-
-
+        // Stat cards
         echo '<div class="stats-grid">';
-        $this->stat_card($icons['wp'], 'WordPress', $stats['wp_version']);
-        $this->stat_card($icons['php'], 'PHP', $stats['php_version']);
-        $this->stat_card($icons['plug'], 'Plugins Installed', (string) $stats['plugins_total']);
-        $this->stat_card($icons['active'], $is_network ? 'Plugins Active (Network)' : 'Plugins Active', (string) $stats['plugins_active']);
+        $this->stat_card($icons['wp'],       'WordPress',                                    $stats['wp_version']);
+        $this->stat_card($icons['php'],      'PHP',                                          $stats['php_version']);
+        $this->stat_card($icons['db'],       $stats['db_type'],                              $stats['db_version']);
+        $this->stat_card($icons['plug'],     'Plugins Installed',                            (string) $stats['plugins_total']);
+        $this->stat_card($icons['active'],   $is_network ? 'Plugins Active (Network)'   : 'Plugins Active',   (string) $stats['plugins_active']);
         $this->stat_card($icons['inactive'], $is_network ? 'Plugins Inactive (Network)' : 'Plugins Inactive', (string) $stats['plugins_inactive']);
         echo '</div>';
 
+        // WordPress version notice
         if ( version_compare($stats['wp_version'], $stats['wp_latest'], '>=') ) {
             echo '<br><b>'.esc_html__('You are already on the latest WordPress version.', 'pcc').'</b><br><br>';
         } else {
             echo '<br><b>'.sprintf(esc_html__('The latest stable WordPress version available is: %s', 'pcc'), esc_html($stats['wp_latest'])).'</b><br><br>';
         }
 
+        // ── Database version warning banner ──────────────────────────────────────
+        $clean_db     = $stats['db_version'];  // e.g. "8.0.32" or "10.6.14"
+        $db_label     = $stats['db_type'];     // "MySQL" or "MariaDB"
+        $min_required = ( $db_label === 'MariaDB' ) ? '10.6' : '8.0';
+        $db_too_old   = ( $clean_db !== 'unknown' ) && version_compare($clean_db, $min_required, '<');
+
+        if ( $db_too_old ) {
+            echo '<div style="margin:0 0 16px 0;padding:14px 18px;border-left:4px solid #b71c1c;background:#fff5f5;border-radius:4px;display:flex;align-items:flex-start;gap:12px;">
+                <span style="font-size:22px;line-height:1.3;">⚠️</span>
+                <div>
+                    <strong style="color:#b71c1c;font-size:14px;">Database Compatibility Warning — WordPress 7.0</strong>
+                    <p style="margin:6px 0 0;color:#333;font-size:13px;line-height:1.6;">
+                        Your server is running <strong>' . esc_html($db_label . ' ' . $clean_db) . '</strong>,
+                        but WordPress 7.0 requires a minimum of <strong>' . esc_html($db_label . ' ' . $min_required) . '</strong>.
+                        Sites on older database versions will <strong>not be offered the WordPress 7.0 update</strong>
+                        and will remain on 6.9 until the database is upgraded.
+                        Contact your hosting provider to upgrade your database before updating WordPress.
+                    </p>
+                </div>
+            </div>';
+        } else {
+            echo '<div style="margin:0 0 16px 0;padding:14px 18px;border-left:4px solid #155724;background:#f0fff4;border-radius:4px;display:flex;align-items:flex-start;gap:12px;">
+                <span style="font-size:22px;line-height:1.3;">✅</span>
+                <div>
+                    <strong style="color:#155724;font-size:14px;">Database Compatible with WordPress 7.0</strong>
+                    <p style="margin:6px 0 0;color:#333;font-size:13px;line-height:1.6;">
+                        Your server is running <strong>' . esc_html($db_label . ' ' . $clean_db) . '</strong>,
+                        which meets the WordPress 7.0 minimum database requirement
+                        of <strong>' . esc_html($db_label . ' ' . $min_required) . '</strong>.
+                    </p>
+                </div>
+            </div>';
+        }
+        // ── End database banner ──────────────────────────────────────────────────
+
         $settings_url = admin_url('admin.php?page=' . self::SUBMENU_SETTINGS_SLUG);
-        $license = trim(get_option(self::OPTION_LICENSE_KEY, ''));
-        $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false); 
-        $remote_map = get_option(self::OPTION_REMOTE_MAP, []);
+        $license      = trim(get_option(self::OPTION_LICENSE_KEY, ''));
+        $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false);
+        $remote_map   = get_option(self::OPTION_REMOTE_MAP, []);
         if ( ! is_array($remote_map) ) $remote_map = [];
 
         echo '
@@ -761,7 +808,7 @@ if ( ! $license_valid ) {
             <div style="flex:1;text-align:right;min-width:320px;">
                 <a href="' . esc_url($settings_url) . '" class="button button-secondary" style="margin-right:8px;">' . esc_html__('Settings', 'pcc') . '</a>
                 <button id="exportButton" class="button button-secondary" style="margin-right:8px;">'.esc_html__('Export to CSV', 'pcc').'</button>
-                <button id="pcc-fetch-latest" class="button button-secondary"  style="margin-right:8px;">Fetch latest result</button>
+                <button id="pcc-fetch-latest" class="button button-secondary" style="margin-right:8px;">Fetch latest result</button>
                 <button id="pcc-rescan" class="button button-primary" style="margin-right:8px;">'.esc_html__('Rescan', 'pcc').'</button>
                 <div id="pcc-mode-notice" style="display:inline-block;vertical-align:middle;margin-left:12px;font-weight:600;"></div>
             </div>
@@ -769,28 +816,25 @@ if ( ! $license_valid ) {
 
         echo '<hr />';
         echo '<h2>'.esc_html__('Local Plugin Compatibility Summary', 'pcc').'</h2>';
-     
-	 if ( $license_valid ) {
-    echo '<p style="color:#155724;font-weight:500;">
-        The results you are viewing are fetched directly from the CompatShield Portal because your license is active.
-        These include advanced PHP compatibility checks (PHP 8.1–8.5).
-    </p>';
-} else {
-    echo '<p>'.esc_html__(
-        'This table uses WPTide data until you validate a CompatShield license. Subscribe to the $1/month entry plan (recurring) to unlock Portal results (PHP 8.1–8.5). Use "Rescan" to request a fresh Portal scan (when licensed) or refresh WPTide (when not). Use "Fetch latest result" to pull Portal output when available.',
-        'pcc'
-    ).'</p>';
-}
 
-	 
-	 
+        if ( $license_valid ) {
+            echo '<p style="color:#155724;font-weight:500;">
+                The results you are viewing are fetched directly from the CompatShield Portal because your license is active.
+                These include advanced PHP compatibility checks (PHP 8.1–8.5).
+            </p>';
+        } else {
+            echo '<p>'.esc_html__(
+                'This table uses WPTide data until you validate a CompatShield license. Subscribe to the $1/month entry plan (recurring) to unlock Portal results (PHP 8.1–8.5). Use "Rescan" to request a fresh Portal scan (when licensed) or refresh WPTide (when not). Use "Fetch latest result" to pull Portal output when available.',
+                'pcc'
+            ).'</p>';
+        }
+
         $this->render_dashboard_table_only();
 
         $notice_text = $license_valid
-    ? 'Portal mode — license validated. Showing CompatShield results (includes PHP 8.1–8.5).'
-    : 'WPTide mode — showing community results (limited to PHP ≤ 8.0). <a href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $1/month </a> to enable CompatShield results (PHP 8.1–8.5).';
+            ? 'Portal mode — license validated. Showing CompatShield results (includes PHP 8.1–8.5).'
+            : 'WPTide mode — showing community results (limited to PHP ≤ 8.0). <a href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $1/month </a> to enable CompatShield results (PHP 8.1–8.5).';
 
-        // Inline JS: set mode notice + auto-fetch remote when license_valid and remote map empty
         $pcc_settings_nonce = wp_create_nonce('pcc_settings_nonce');
         ?>
         <script>
@@ -803,8 +847,8 @@ if ( ! $license_valid ) {
                     var btn = $(this);
                     btn.prop('disabled',true).text('Requesting scan...');
                     $.post(ajaxurl, {
-                        action: '<?php echo self::AJAX_ACTION?>',
-                        nonce: '<?php echo wp_create_nonce(self::NONCE_ACTION);?>'
+                        action: '<?php echo self::AJAX_ACTION; ?>',
+                        nonce:  '<?php echo wp_create_nonce(self::NONCE_ACTION); ?>'
                     }).done(function(resp){
                         if (resp.success) {
                             var data = resp.data || {};
@@ -818,25 +862,21 @@ if ( ! $license_valid ) {
                         } else {
                             alert('Rescan failed: ' + JSON.stringify(resp.data));
                         }
-                    }).fail(function(){ alert('Rescan failed (network)'); }).always(function(){ btn.prop('disabled',false).text('<?php echo esc_js(__('Rescan', 'pcc')); ?>'); });
+                    }).fail(function(){ alert('Rescan failed (network)'); })
+                      .always(function(){ btn.prop('disabled',false).text('<?php echo esc_js(__('Rescan', 'pcc')); ?>'); });
                 });
 
-                // Auto-fetch remote mapping if license is valid but we have no mapping yet.
                 <?php if ( $license_valid && empty($remote_map) ) : ?>
-                    // attempt to fetch remote mapping automatically
-                    (function(){
-                        var btn = $('<button/>',{id:'pcc-autofetch', text:'Fetching remote results...'}).css({display:'none'});
-                        $('body').append(btn);
-                        $.post(ajaxurl, {
-                            action: 'pcc_fetch_remote',
-                            nonce: '<?php echo esc_js($pcc_settings_nonce); ?>'
-                        }).done(function(resp){
-                            if ( resp && resp.success && resp.data && resp.data.updated > 0 ) {
-                                // mapping applied; reload to show new mapping
-                                setTimeout(function(){ location.reload(); }, 700);
-                            }
-                        }).fail(function(){ /* ignore silently */ });
-                    })();
+                (function(){
+                    $.post(ajaxurl, {
+                        action: 'pcc_fetch_remote',
+                        nonce:  '<?php echo esc_js($pcc_settings_nonce); ?>'
+                    }).done(function(resp){
+                        if ( resp && resp.success && resp.data && resp.data.updated > 0 ) {
+                            setTimeout(function(){ location.reload(); }, 700);
+                        }
+                    }).fail(function(){ /* ignore silently */ });
+                })();
                 <?php endif; ?>
             });
         })(jQuery);
@@ -862,12 +902,12 @@ if ( ! $license_valid ) {
         echo '<tr><td><b>'.esc_html__('Disk Space Free', 'pcc').'</b></td><td><b>'.intval($space_free_gb).' GB</b></td></tr></table>';
 
         $ini = [
-            'Max Execution Time' => ini_get('max_execution_time'),
-            'Max File Uploads'   => ini_get('max_file_uploads'),
-            'Max Input Vars'     => ini_get('max_input_vars'),
-            'Post Max Size'      => ini_get('post_max_size'),
-            'Memory Limit'       => ini_get('memory_limit'),
-            'Upload Max Filesize'=> ini_get('upload_max_filesize'),
+            'Max Execution Time'  => ini_get('max_execution_time'),
+            'Max File Uploads'    => ini_get('max_file_uploads'),
+            'Max Input Vars'      => ini_get('max_input_vars'),
+            'Post Max Size'       => ini_get('post_max_size'),
+            'Memory Limit'        => ini_get('memory_limit'),
+            'Upload Max Filesize' => ini_get('upload_max_filesize'),
         ];
 
         echo '<table class="sysinfo">';
@@ -898,12 +938,10 @@ if ( ! $license_valid ) {
             echo '<div class="updated"><p>Settings saved. Please validate the license using the "Validate License" button.</p></div>';
         }
 
-        $license = esc_attr(get_option(self::OPTION_LICENSE_KEY, ''));
+        $license       = esc_attr(get_option(self::OPTION_LICENSE_KEY, ''));
         $license_valid = (bool) get_option(self::OPTION_LICENSE_VALID, false);
-        $buy_link   = esc_url(self::PRODUCT_URL);
-		$signup_link = esc_url(self::SIGNUP_URL);
-
-
+        $buy_link      = esc_url(self::PRODUCT_URL);
+        $signup_link   = esc_url(self::SIGNUP_URL);
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('Plugin Compatibility Checker', 'pcc'); ?></h1>
@@ -915,15 +953,13 @@ if ( ! $license_valid ) {
                         <th scope="row"><label for="pcc_license_key">Portal License Key</label></th>
                         <td>
                             <input type="text" id="pcc_license_key" name="pcc_license_key" value="<?php echo $license; ?>" class="regular-text" />
-<p class="description">
-   Enter your CompatShield license key to enable Portal mode.
-Without a validated license, the plugin uses WPTide data limited to PHP ≤ 8.0.
-With a validated license (entry plan $1/month or Pro), CompatShield shows newer PHP compatibility (8.1–8.5) right in your dashboard.
-Don’t have a key? <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe for $1/month </a>.
-
-</p>
-                        
-						</td>
+                            <p class="description">
+                                Enter your CompatShield license key to enable Portal mode.
+                                Without a validated license, the plugin uses WPTide data limited to PHP ≤ 8.0.
+                                With a validated license (entry plan $1/month or Pro), CompatShield shows newer PHP compatibility (8.1–8.5) right in your dashboard.
+                                Don't have a key? <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe for $1/month</a>.
+                            </p>
+                        </td>
                     </tr>
                 </table>
                 <p class="submit"><input type="submit" name="pcc_save_settings" id="submit" class="button button-primary" value="Save Settings"></p>
@@ -940,50 +976,42 @@ Don’t have a key? <a href="<?php echo $signup_link; ?>" target="_blank" rel="n
             </p>
 
             <p style="margin-top:8px;">
-               <?php if (! $license_valid && $license) : ?>
-    <em style="color:#856404;">Saved license not validated yet. Click <strong>Validate License</strong> to enable Portal mode.</em>
-<?php elseif (! $license) : ?>
-    <em style="color:#b71c1c;">No license configured — using WPTide results (PHP ≤ 8.0). <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $1/month </a> or <a href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">upgrade to Pro</a>.</em>
-<?php else: ?>
-    <em style="color:#155724;">License validated — Portal mode enabled (PHP 8.1–8.5 shown).</em>
-<?php endif; ?>
+                <?php if (! $license_valid && $license) : ?>
+                    <em style="color:#856404;">Saved license not validated yet. Click <strong>Validate License</strong> to enable Portal mode.</em>
+                <?php elseif (! $license) : ?>
+                    <em style="color:#b71c1c;">No license configured — using WPTide results (PHP ≤ 8.0). <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $1/month</a> or <a href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">upgrade to Pro</a>.</em>
+                <?php else: ?>
+                    <em style="color:#155724;">License validated — Portal mode enabled (PHP 8.1–8.5 shown).</em>
+                <?php endif; ?>
             </p>
-			
-			
-			<div style="margin-top:12px;padding:14px;border:1px solid #e5e5e5;border-radius:6px;background:#fafafa;">
-    <strong>No license yet?</strong>
-<a class="button button-primary" href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $1/month </a>
-&nbsp; or &nbsp;
-<a class="button" href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">View Pro </a>
-<div style="margin-top:6px;color:#555;">The $1 entry plan unlocks PHP 8.1–8.5 compatibility visibility via the Portal. Pro adds deeper summaries and recommendations.</div>
 
-</div>
-
+            <div style="margin-top:12px;padding:14px;border:1px solid #e5e5e5;border-radius:6px;background:#fafafa;">
+                <strong>No license yet?</strong>
+                <a class="button button-primary" href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $1/month</a>
+                &nbsp; or &nbsp;
+                <a class="button" href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">View Pro</a>
+                <div style="margin-top:6px;color:#555;">The $1 entry plan unlocks PHP 8.1–8.5 compatibility visibility via the Portal. Pro adds deeper summaries and recommendations.</div>
+            </div>
 
             <hr />
 
             <p><em><?php esc_html_e('Use the main "Plugin Compatibility Checker" menu item to view the local compatibility table and dashboard. Settings page only manages portal/license and remote actions.', 'pcc'); ?></em></p>
+            <p><em><?php esc_html_e('Use the User-Guide if you face any issue after license activation or you can raise a ticket or mail at support@compatshield.com.', 'pcc'); ?></em></p>
+            <p><a href="https://www.compatshield.com/user-guide/" target="_blank"><strong><?php esc_html_e('Open Full User Guide', 'pcc'); ?></strong></a></p>
 
-<p><em><?php esc_html_e('Use the User-Guide if you face any issue after license activation or you can raise a ticket or mail at support@compatshield.com.', 'pcc'); ?></em></p>
+            <div style="margin-top:15px;margin-bottom:25px;">
+                <iframe width="100%" height="350" src="https://www.youtube.com/embed/PCxhJmO-Tb4" frameborder="0" allowfullscreen></iframe>
+            </div>
 
-<p><a href="https://www.compatshield.com/user-guide/" target="_blank"><strong><?php esc_html_e('Open Full User Guide', 'pcc'); ?></strong></a></p>
-
-<!-- YouTube Video Tutorial -->
-<div style="margin-top:15px; margin-bottom:25px;">
-<iframe width="100%" height="350" src="https://www.youtube.com/embed/PCxhJmO-Tb4" frameborder="0" allowfullscreen></iframe>
-</div>
-
-<!-- Quick Steps Summary -->
-<p><strong><?php esc_html_e('Quick Steps:', 'pcc'); ?></strong></p>
-<ol style="margin-left:20px;">
-    <li><?php esc_html_e('Login to Portal Dashboard → Add your domain inside License tab', 'pcc'); ?></li>
-    <li><?php esc_html_e('Copy your License Key from Portal', 'pcc'); ?></li>
-    <li><?php esc_html_e('Paste License Key inside Plugin settings here', 'pcc'); ?></li>
-    <li><?php esc_html_e('Click Validate License', 'pcc'); ?></li>
-    <li><?php esc_html_e('Click Save Settings', 'pcc'); ?></li>
-    <li><?php esc_html_e('Click Rescan on main scan page to fetch plugins', 'pcc'); ?></li>
-</ol>
-
+            <p><strong><?php esc_html_e('Quick Steps:', 'pcc'); ?></strong></p>
+            <ol style="margin-left:20px;">
+                <li><?php esc_html_e('Login to Portal Dashboard → Add your domain inside License tab', 'pcc'); ?></li>
+                <li><?php esc_html_e('Copy your License Key from Portal', 'pcc'); ?></li>
+                <li><?php esc_html_e('Paste License Key inside Plugin settings here', 'pcc'); ?></li>
+                <li><?php esc_html_e('Click Validate License', 'pcc'); ?></li>
+                <li><?php esc_html_e('Click Save Settings', 'pcc'); ?></li>
+                <li><?php esc_html_e('Click Rescan on main scan page to fetch plugins', 'pcc'); ?></li>
+            </ol>
         </div>
 
         <script>
@@ -1004,8 +1032,8 @@ Don’t have a key? <a href="<?php echo $signup_link; ?>" target="_blank" rel="n
 
     private function render_dashboard_table_only() {
         $is_network = is_multisite();
-        $stats     = $this->get_environment_stats($is_network);
-        $scan      = $this->get_scan_results(false, $is_network);
+        $scan       = $this->get_scan_results(false, $is_network);
+
         echo '<div class="table-responsive table-hover"><table class="table table-bordered" id="pcctable">
             <thead class="thead-dark">
                 <tr>
@@ -1023,7 +1051,6 @@ Don’t have a key? <a href="<?php echo $signup_link; ?>" target="_blank" rel="n
 
         $export_rows = [];
         foreach ( $scan['rows'] as $row ) {
-            // reverted to original colors
             $bg = ($row['current_version'] === $row['latest_version'] && $row['latest_version'] !== 'No Data') ? '#135e96' : '#f64855';
 
             echo '<tr style="background-color:'.esc_attr($bg).'">';
@@ -1038,30 +1065,27 @@ Don’t have a key? <a href="<?php echo $signup_link; ?>" target="_blank" rel="n
             echo '</tr>';
 
             $export_rows[] = [
-                'Plugin Name' => str_replace(',', ' ', $row['name']),
-                'Current Plugin Version' => $row['current_version'],
-                'Latest Plugin Version' => $row['latest_version'],
-                'Compatible With WordPress Version' => $row['tested_wp'],
-                'Supported PHP Version' => str_replace(',', ' ', $row['php_supported']),
+                'Plugin Name'                          => str_replace(',', ' ', $row['name']),
+                'Current Plugin Version'               => $row['current_version'],
+                'Latest Plugin Version'                => $row['latest_version'],
+                'Compatible With WordPress Version'    => $row['tested_wp'],
+                'Supported PHP Version'                => str_replace(',', ' ', $row['php_supported']),
                 $is_network ? 'Plugin Network Status' : 'Plugin Status' => $row['status'],
                 'Updateable With Latest Version of WordPress' => $row['upgradeable'],
-                'Issues Resolved in Last Two Months' => "'" . str_replace(':','', $row['issues_ratio']),
+                'Issues Resolved in Last Two Months'   => "'" . str_replace(':','', $row['issues_ratio']),
             ];
         }
 
         echo '</tbody></table></div>';
 
-// ===== Add a note below the table (Option B) =====
-echo '<div class="pcc-table-note" style="margin-top:12px;padding:10px;border-left:4px solid #135e96;background:#f7fbff;">';
-echo '<strong>' . esc_html__('Note:', 'pcc') . '</strong> ' . esc_html__('Plugins showing No Data are likely custom/premium — check with the plugin author or the plugin version you are using have been removed by the author from wporg.', 'pcc');
-echo '</div>';
-// ================================================
+        echo '<div class="pcc-table-note" style="margin-top:12px;padding:10px;border-left:4px solid #135e96;background:#f7fbff;">';
+        echo '<strong>' . esc_html__('Note:', 'pcc') . '</strong> ' . esc_html__('Plugins showing No Data are likely custom/premium — check with the plugin author or the plugin version you are using have been removed by the author from wporg.', 'pcc');
+        echo '</div>';
 
-printf('<script>window.PCCExportData=%s;</script>', wp_json_encode($export_rows));
-
+        printf('<script>window.PCCExportData=%s;</script>', wp_json_encode($export_rows));
     }
 
-    /* Helpers (unchanged) */
+    /* Helpers */
 
     private function resolve_plugin_slug($plugin_file, $text_domain, $plugin_uri) {
         $dir = dirname($plugin_file);
@@ -1100,20 +1124,18 @@ printf('<script>window.PCCExportData=%s;</script>', wp_json_encode($export_rows)
         $data = json_decode($body, true);
         if ( ! is_array($data) || isset($data['error']) ) return [];
         return [
-            'tested'           => $data['tested']              ?? null,
-            'version'          => $data['version']             ?? null,
-            'support_threads'  => $data['support_threads']     ?? null,
+            'tested'           => $data['tested']                   ?? null,
+            'version'          => $data['version']                  ?? null,
+            'support_threads'  => $data['support_threads']          ?? null,
             'support_resolved' => $data['support_threads_resolved'] ?? null,
-            'requires_php'     => $data['requires_php']        ?? null,
+            'requires_php'     => $data['requires_php']             ?? null,
         ];
     }
 
     private function fetch_wptide_php_compat_list($slug, $latest_version) {
         $url = sprintf('https://wptide.org/api/v1/audit/wporg/plugin/%s/%s?reports=all', rawurlencode($slug), rawurlencode($latest_version));
         $res = wp_remote_get($url, [ 'timeout' => 20 ]);
-        if ( is_wp_error($res) ) {
-            return null;
-        }
+        if ( is_wp_error($res) ) return null;
         $body = wp_remote_retrieve_body($res);
         $data = json_decode($body, true);
         if ( ! is_array($data) || isset($data['error']) ) return null;
@@ -1147,9 +1169,16 @@ printf('<script>window.PCCExportData=%s;</script>', wp_json_encode($export_rows)
 
         $wp_latest = $this->fetch_wp_latest_version();
 
+        // Get full DB version string via SELECT VERSION() for accurate MariaDB detection
+        $full_db   = $this->get_db_version();
+        $db_parsed = $this->parse_db_version($full_db);
+
         return [
             'wp_version'      => $wp_version,
             'php_version'     => $php_ver,
+            'db_version'      => $db_parsed['clean'],   // e.g. "8.0.32" or "10.6.14"
+            'db_type'         => $db_parsed['type'],    // "MySQL" or "MariaDB"
+            'db_version_full' => $db_parsed['full'],    // raw string e.g. "10.6.14-MariaDB"
             'plugins_total'   => $total,
             'plugins_active'  => $active,
             'plugins_inactive'=> $inactive,
@@ -1175,8 +1204,8 @@ printf('<script>window.PCCExportData=%s;</script>', wp_json_encode($export_rows)
     }
 
     private function build_scan_results($is_network) {
-        $plugins        = get_plugins();
-        $wp_latest      = $this->fetch_wp_latest_version();
+        $plugins   = get_plugins();
+        $wp_latest = $this->fetch_wp_latest_version();
 
         if ( $is_network ) {
             $active_map = (array) get_site_option('active_sitewide_plugins', []);
@@ -1184,18 +1213,17 @@ printf('<script>window.PCCExportData=%s;</script>', wp_json_encode($export_rows)
             $active_map = array_fill_keys( (array) get_option('active_plugins', []), true );
         }
 
-        $rows = [];
+        $rows       = [];
         $remote_map = get_option(self::OPTION_REMOTE_MAP, []);
         if ( ! is_array($remote_map) ) $remote_map = [];
 
         foreach ( $plugins as $file => $plug ) {
-            // skip plugins whose main file doesn't exist (handles removals)
             $candidate = WP_PLUGIN_DIR . '/' . $file;
             if ( ! file_exists($candidate) ) continue;
 
-            $name        = isset($plug['Name']) ? $plug['Name'] : $file;
-            $current_ver = isset($plug['Version']) ? $plug['Version'] : '';
-            $plugin_uri  = isset($plug['PluginURI']) ? $plug['PluginURI'] : '';
+            $name        = isset($plug['Name'])       ? $plug['Name']       : $file;
+            $current_ver = isset($plug['Version'])    ? $plug['Version']    : '';
+            $plugin_uri  = isset($plug['PluginURI'])  ? $plug['PluginURI']  : '';
             $text_domain = isset($plug['TextDomain']) ? $plug['TextDomain'] : '';
             $slug        = $this->resolve_plugin_slug($file, $text_domain, $plugin_uri);
 
