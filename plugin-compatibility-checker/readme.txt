@@ -1,6 +1,6 @@
 === Plugin Compatibility Checker ===
 Contributors: CompatShield
-Tags: compatibility, plugin checker, php version, mysql compatibility, mariadb, database checker, wordpress 7, hosting compatibility, security, vulnerabilities, php compatibility, php 8.5, wordpress security, vulnerability scan, plugin scanner, php errors, php version checker, wordpress admin tools
+Tags: compatibility, php-compatibility, php version, mysql compatibility, php-upgrade, php compatibility, php-8, vulnerability scan, plugin scanner, php version checker
 Requires at least: 5.0
 Tested up to: 7.1
 Requires PHP: 7.2
@@ -17,8 +17,8 @@ The **Plugin Compatibility Checker** helps you keep your WordPress site stable a
 **🆕 WordPress 7.0 Database Readiness**  
 WordPress 7.0 introduces stricter database requirements (MySQL 8.0+ / MariaDB 10.6+). Many hosting environments still run older database versions which may silently block updates. This plugin now detects database compatibility and warns you before upgrading.
 
-**$1/month License Required (Entry Plan)**  
-You must subscribe to the CompatShield Portal ($1/month recurring) to obtain a **license key**. Once activated, you will be able to see plugin compatibility results (up to PHP 8.5) and database compatibility directly inside your WordPress admin.
+**$2/month License Required (Entry Plan)**  
+You must subscribe to the CompatShield Portal ($2/month recurring) to obtain a **license key**. Once activated, you will be able to see plugin compatibility results (up to PHP 8.5) and database compatibility directly inside your WordPress admin.
 
 **📺 Video Tutorial**  
 Watch step-by-step how to activate your license & run your first scan:  
@@ -41,7 +41,7 @@ Upgrading to Pro unlocks the full CompatShield Portal Dashboard with advanced fe
 ### ✨ Key Features
 
 * **PHP Compatibility Check** – Scan plugins for PHP compatibility.
-  * $1/month license: Shows PHP compatibility results directly inside WP Plugin backend (up to PHP 8.5)
+  * $2/month license: Shows PHP compatibility results directly inside WP Plugin backend (up to PHP 8.5)
   * Pro license: Deeper breakdowns, insights, and analysis inside Portal Dashboard
 
 * **Database Compatibility Check (NEW 🚀)** – Detect MySQL/MariaDB version and ensure WordPress 7.0 readiness.
@@ -63,27 +63,27 @@ Upgrading to Pro unlocks the full CompatShield Portal Dashboard with advanced fe
 ### 🔑 Entry Plan vs Pro Plan
 
 * **PHP Compatibility Check**  
-  $1 Plan: WP Admin Results up to PHP 8.5  
+  $2 Plan: WP Admin Results up to PHP 8.5  
   Pro Plan: Detailed compatibility insights in Portal Dashboard
 
 * **Database Compatibility Check**  
-  $1 Plan: Basic DB version detection in WP Admin  
+  $2 Plan: Basic DB version detection in WP Admin  
   Pro Plan: Full upgrade readiness insights + risk analysis + recommendations
 
 * **Vulnerability Summary**  
-  $1 Plan: Not available  
+  $2 Plan: Not available  
   Pro Plan: Available in Portal
 
 * **Email Notifications**  
-  $1 Plan: Not available  
+  $2 Plan: Not available  
   Pro Plan: Available
 
 * **Portal Dashboard**  
-  $1 Plan: Not available  
+  $2 Plan: Not available  
   Pro Plan: Full access (compatibility + vulnerabilities + detailed summaries + site overview)
 
 * **Custom/Premium Plugins ZIP Scanning**  
-  $1 Plan: Not available  
+  $2 Plan: Not available  
   Pro Plan: Supported via Portal ZIP uploader
 
 == Screenshots ==
@@ -97,13 +97,13 @@ Upgrading to Pro unlocks the full CompatShield Portal Dashboard with advanced fe
 
 1. Upload `plugin-compatibility-checker` to the `/wp-content/plugins/` directory.
 2. Activate the plugin through the **Plugins** menu in WordPress.
-3. Subscribe inside the Portal ($1/month) and enter your license key to unlock compatibility up to PHP 8.5 and database checks.
+3. Subscribe inside the Portal ($2/month) and enter your license key to unlock compatibility up to PHP 8.5 and database checks.
 4. (Optional) Upgrade to Pro to enable Portal Dashboard and advanced features.
 
 == Frequently Asked Questions ==
 
 = What happens if I don’t activate a license? =
-You must subscribe to the $1/month entry plan and activate your license to see compatibility results. Without license activation, visibility will be limited. Pro unlocks dashboard analytics, notifications and vulnerability insights.
+You must subscribe to the $2/month entry plan and activate your license to see compatibility results. Without license activation, visibility will be limited. Pro unlocks dashboard analytics, notifications and vulnerability insights.
 
 = Why is database compatibility important? =
 Starting with WordPress 7.0, database requirements are stricter (MySQL 8.0+ / MariaDB 10.6+). If your hosting is outdated, your site may not receive updates.

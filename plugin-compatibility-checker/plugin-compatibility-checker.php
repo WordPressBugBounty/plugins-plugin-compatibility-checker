@@ -730,9 +730,9 @@ JS;
 
         if ( ! $license_valid ) {
             echo '<div class="notice" style="margin:12px 0;padding:14px;border-left:4px solid #135e96;background:#f7fbff;">
-                    <strong>Unlock PHP 8.1–8.5 checks — only $1/month (subscription).</strong>
-                    Subscribe for $1/month to get a CompatShield license key and view newer PHP compatibility in this dashboard.
-                    &nbsp; <a class="button button-primary" href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $1/month </a>
+                    <strong>Unlock PHP 8.1–8.5 checks — only $2/month (subscription).</strong>
+                    Subscribe for $2/month to get a CompatShield license key and view newer PHP compatibility in this dashboard.
+                    &nbsp; <a class="button button-primary" href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $2/month </a>
                     &nbsp; <a class="button" href="'.$buy_link.'" target="_blank" rel="noopener">See Pro features</a>
                   </div>';
         }
@@ -824,7 +824,7 @@ JS;
             </p>';
         } else {
             echo '<p>'.esc_html__(
-                'This table uses WPTide data until you validate a CompatShield license. Subscribe to the $1/month entry plan (recurring) to unlock Portal results (PHP 8.1–8.5). Use "Rescan" to request a fresh Portal scan (when licensed) or refresh WPTide (when not). Use "Fetch latest result" to pull Portal output when available.',
+                'This table uses WPTide data until you validate a CompatShield license. Subscribe to the $2/month entry plan (recurring) to unlock Portal results (PHP 8.1–8.5). Use "Rescan" to request a fresh Portal scan (when licensed) or refresh WPTide (when not). Use "Fetch latest result" to pull Portal output when available.',
                 'pcc'
             ).'</p>';
         }
@@ -833,7 +833,7 @@ JS;
 
         $notice_text = $license_valid
             ? 'Portal mode — license validated. Showing CompatShield results (includes PHP 8.1–8.5).'
-            : 'WPTide mode — showing community results (limited to PHP ≤ 8.0). <a href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $1/month </a> to enable CompatShield results (PHP 8.1–8.5).';
+            : 'WPTide mode — showing community results (limited to PHP ≤ 8.0). <a href="'.$signup_link.'" target="_blank" rel="noopener">Subscribe — $2/month </a> to enable CompatShield results (PHP 8.1–8.5).';
 
         $pcc_settings_nonce = wp_create_nonce('pcc_settings_nonce');
         ?>
@@ -956,8 +956,8 @@ JS;
                             <p class="description">
                                 Enter your CompatShield license key to enable Portal mode.
                                 Without a validated license, the plugin uses WPTide data limited to PHP ≤ 8.0.
-                                With a validated license (entry plan $1/month or Pro), CompatShield shows newer PHP compatibility (8.1–8.5) right in your dashboard.
-                                Don't have a key? <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe for $1/month</a>.
+                                With a validated license (entry plan $2/month or Pro), CompatShield shows newer PHP compatibility (8.1–8.5) right in your dashboard.
+                                Don't have a key? <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe for $2/month</a>.
                             </p>
                         </td>
                     </tr>
@@ -979,18 +979,18 @@ JS;
                 <?php if (! $license_valid && $license) : ?>
                     <em style="color:#856404;">Saved license not validated yet. Click <strong>Validate License</strong> to enable Portal mode.</em>
                 <?php elseif (! $license) : ?>
-                    <em style="color:#b71c1c;">No license configured — using WPTide results (PHP ≤ 8.0). <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $1/month</a> or <a href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">upgrade to Pro</a>.</em>
+                    <em style="color:#b71c1c;">No license configured — using WPTide results (PHP ≤ 8.0). <a href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $2/month</a> or <a href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">upgrade to Pro</a>.</em>
                 <?php else: ?>
                     <em style="color:#155724;">License validated — Portal mode enabled (PHP 8.1–8.5 shown).</em>
                 <?php endif; ?>
-            </p>
+            </p>  
 
             <div style="margin-top:12px;padding:14px;border:1px solid #e5e5e5;border-radius:6px;background:#fafafa;">
                 <strong>No license yet?</strong>
-                <a class="button button-primary" href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $1/month</a>
+                <a class="button button-primary" href="<?php echo $signup_link; ?>" target="_blank" rel="noopener">Subscribe — $2/month</a>
                 &nbsp; or &nbsp;
                 <a class="button" href="<?php echo $buy_link; ?>" target="_blank" rel="noopener">View Pro</a>
-                <div style="margin-top:6px;color:#555;">The $1 entry plan unlocks PHP 8.1–8.5 compatibility visibility via the Portal. Pro adds deeper summaries and recommendations.</div>
+                <div style="margin-top:6px;color:#555;">The $2 entry plan unlocks PHP 8.1–8.5 compatibility visibility via the Portal. Pro adds deeper summaries and recommendations.</div>
             </div>
 
             <hr />
