@@ -4,7 +4,7 @@ Tags: compatibility, php-compatibility, php version, mysql compatibility, php-up
 Requires at least: 5.0
 Tested up to: 7.1
 Requires PHP: 7.2
-Stable tag: 7.0.7
+Stable tag: 7.0.9
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,6 +16,9 @@ The **Plugin Compatibility Checker** helps you keep your WordPress site stable a
 
 **🆕 WordPress 7.0 Database Readiness**  
 WordPress 7.0 introduces stricter database requirements (MySQL 8.0+ / MariaDB 10.6+). Many hosting environments still run older database versions which may silently block updates. This plugin now detects database compatibility and warns you before upgrading.
+
+**🆕 PHP Security Warning**  
+The plugin now checks your PHP version against a list of known PHP vulnerabilities (for example PHP2Shell, CVE-2026-109618 / CVE-2026-109619). If your PHP version is affected, a warning appears on the plugin dashboard with the vulnerability name and CVE, and asks you to update PHP or contact your hosting provider. This warning is shown to all users, no license needed.
 
 **$2/month License Required (Entry Plan)**  
 You must subscribe to the CompatShield Portal ($2/month recurring) to obtain a **license key**. Once activated, you will be able to see plugin compatibility results (up to PHP 8.5) and database compatibility directly inside your WordPress admin.
@@ -49,6 +52,12 @@ Upgrading to Pro unlocks the full CompatShield Portal Dashboard with advanced fe
   * Warns if hosting environment may block WordPress updates
   * Helps prevent upgrade failures
   * Pro: Advanced insights and upgrade recommendations
+
+* **PHP Security Warning (NEW 🚀)** – Detects if your PHP version is affected by a known vulnerability.
+  * Shows the vulnerability name and CVE ids
+  * Tells you which PHP version to update to, or to ask your host to update
+  * The list is updated regularly by CompatShield, no plugin update needed
+  * Available to all users, no license required
 
 * **Plugin Rescan** – Quickly rescan whenever you install or update plugins.
 
@@ -93,6 +102,18 @@ Upgrading to Pro unlocks the full CompatShield Portal Dashboard with advanced fe
 3. Fetching the latest results from the Portal.  
 4. Viewing detailed compatibility and vulnerabilities (Portal).
 
+== External services ==
+
+This plugin connects to the following services. No personal data or site address is sent in any of these requests unless stated.
+
+**WordPress.org API (api.wordpress.org)** – Used on the dashboard to look up the latest WordPress version and public plugin details (plugin slug). Only the public plugin slug is sent. Provided by WordPress.org: [Privacy Policy](https://wordpress.org/about/privacy/).
+
+**WPTide (wptide.org)** – Used on the dashboard to read the published PHP compatibility audit of a WordPress.org plugin (plugin slug and version). Only the public plugin slug and version are sent. Provided by the WordPress Tide project: [Privacy Policy](https://wordpress.org/about/privacy/).
+
+**CompatShield PHP security list (www.compatshield.com/portal-api/php-vulnerabilities)** – Used to download a public list of known PHP vulnerabilities so the dashboard can warn you if your PHP version is affected. The request sends no data about your site; the comparison with your PHP version happens locally. The list is cached for 6 hours. Provided by CompatShield: [Terms](https://www.compatshield.com/terms) | [Privacy Policy](https://www.compatshield.com/privacy-policy).
+
+**CompatShield Portal (www.compatshield.com/portal-api)** – Used only after you enter a license key. Sends your license key, site address, PHP/WordPress/database versions and the list of installed plugins and versions to run the scan and return results. Provided by CompatShield: [Terms](https://www.compatshield.com/terms) | [Privacy Policy](https://www.compatshield.com/privacy-policy).
+
 == Installation ==
 
 1. Upload `plugin-compatibility-checker` to the `/wp-content/plugins/` directory.
@@ -116,3 +137,9 @@ This usually means the plugin is either custom/premium or its version has been r
 
 = Do I need to rescan after adding new plugins? =
 Yes, please click **Rescan** to include new plugins in the compatibility check.
+
+== Changelog ==
+
+= 7.0.8 =
+* New: PHP security warning on the dashboard when your PHP version is affected by a known vulnerability (currently PHP2Shell, CVE-2026-109618 / CVE-2026-109619).
+* Docs: added External services disclosure.

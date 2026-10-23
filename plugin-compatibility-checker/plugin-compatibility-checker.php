@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Plugin Compatibility Checker (Portal-integrated)
  * Description: Check which WordPress and PHP versions your plugins are compatible with before updating WordPress.adds Portal integration: license settings, request scan, fetch latest result, cron poller, admin email on new results.
- * Version: 7.0.7
+ * Version: 7.0.9
  * Author: CompatShield
  * Author URI: https://www.compatshield.com/
  */
@@ -31,6 +31,10 @@ class PCC {
     const PORTAL_API = 'https://www.compatshield.com/portal-api';
     const SIGNUP_URL  = 'https://www.compatshield.com/product';      // free plan signup
     const PRODUCT_URL = 'https://www.compatshield.com/product/';    // pricing / pro
+    const PHP_VULN_API_URL      = 'https://www.compatshield.com/portal-api/php-vulnerabilities/php-vulnerabilities-endpoint.php'; // public JSON, no site data sent
+    const PHP_VULN_CACHE_KEY    = 'pcc_php_vulns';        // transient: fresh list
+    const PHP_VULN_LASTGOOD_KEY = 'pcc_php_vulns_good';   // option: last good list (used if the API is down)
+    const PHP_VULN_RETRY_KEY    = 'pcc_php_vulns_retry';  // transient: back-off after a failed fetch
 
     public function __construct() {
         if ( is_multisite() ) {
@@ -754,6 +758,9 @@ JS;
             echo '<br><b>'.sprintf(esc_html__('The latest stable WordPress version available is: %s', 'pcc'), esc_html($stats['wp_latest'])).'</b><br><br>';
         }
 
+        // PHP security notice (known vulnerabilities for the running PHP version)
+        $this->render_php_vulnerability_notice();
+
         // ── Database version warning banner ──────────────────────────────────────
         $clean_db     = $stats['db_version'];  // e.g. "8.0.32" or "10.6.14"
         $db_label     = $stats['db_type'];     // "MySQL" or "MariaDB"
@@ -1144,6 +1151,201 @@ JS;
         if ( ! is_array($compat_arr) || empty($compat_arr) ) return null;
 
         return implode(', ', $compat_arr);
+    }
+
+    /**
+     * Built-in list, used only when the CompatShield list has never been fetched.
+     */
+    private function builtin_php_vulnerabilities() {
+        return [
+            [
+                'id'                 => 'php2shell-2026-10',
+                'name'               => 'PHP2Shell',
+                'type'               => 'Unauthenticated remote code execution',
+                'cves'               => [ 'CVE-2026-109618', 'CVE-2026-109619' ],
+                'fixed'              => [ '8.5' => '8.5.12', '8.4' => '8.4.27', '8.3' => '8.3.36', '8.2' => '8.2.35' ],
+                'eol_affected_below' => '8.2',
+                'url'                => 'https://www.helpnetsecurity.com/2026/10/21/php2shell-php-vulnerabilities-patched-cve-2026-109618-cve-2026-109619/',
+            ],
+        ];
+    }
+
+    /**
+     * Vulnerability list: cached remote list -> last good remote list -> built-in list.
+     * The request sends no site data (plain User-Agent, no body) and never blocks the page for long.
+     */
+    private function get_php_vulnerability_db() {
+        $cached = get_transient(self::PHP_VULN_CACHE_KEY);
+        if ( is_array($cached) ) {
+            return apply_filters('pcc_php_vulnerabilities', $cached);
+        }
+
+        $list = null;
+        if ( false === get_transient(self::PHP_VULN_RETRY_KEY) ) {
+            $res = wp_remote_get(self::PHP_VULN_API_URL, [
+                'timeout'    => 4,
+                'user-agent' => 'PCC/' . self::version_string(),   // no site URL leaked
+                'headers'    => [ 'Accept' => 'application/json' ],
+            ]);
+            if ( ! is_wp_error($res) && 200 === (int) wp_remote_retrieve_response_code($res) ) {
+                $data = json_decode(wp_remote_retrieve_body($res), true);
+                if ( is_array($data) && isset($data['vulnerabilities']) && is_array($data['vulnerabilities']) ) {
+                    $list = $this->sanitize_php_vulnerabilities($data['vulnerabilities']);
+                }
+            }
+            if ( is_array($list) ) {
+                set_transient(self::PHP_VULN_CACHE_KEY, $list, 6 * HOUR_IN_SECONDS);
+                update_option(self::PHP_VULN_LASTGOOD_KEY, $list, false);
+            } else {
+                set_transient(self::PHP_VULN_RETRY_KEY, 1, HOUR_IN_SECONDS); // don't retry on every page load
+            }
+        }
+
+        if ( ! is_array($list) ) {
+            $good = get_option(self::PHP_VULN_LASTGOOD_KEY, null);
+            $list = is_array($good) ? $good : $this->builtin_php_vulnerabilities();
+        }
+        return apply_filters('pcc_php_vulnerabilities', $list);
+    }
+
+    private static function version_string() {
+        $d = get_file_data(__FILE__, [ 'v' => 'Version' ]);
+        return ! empty($d['v']) ? $d['v'] : '0';
+    }
+
+    /**
+     * Keep only well-formed entries; everything from the API is treated as untrusted.
+     */
+    private function sanitize_php_vulnerabilities($items) {
+        $out = [];
+        foreach ( $items as $v ) {
+            if ( ! is_array($v) || empty($v['name']) || ! is_string($v['name']) ) continue;
+            if ( isset($v['active']) && false === $v['active'] ) continue;
+
+            $fixed = [];
+            if ( isset($v['fixed']) && is_array($v['fixed']) ) {
+                foreach ( $v['fixed'] as $branch => $ver ) {
+                    if ( is_string($branch) && is_string($ver)
+                        && preg_match('/^\d+\.\d+$/', $branch) && preg_match('/^\d+\.\d+\.\d+$/', $ver) ) {
+                        $fixed[$branch] = $ver;
+                    }
+                }
+            }
+            $eol = ( isset($v['eol_affected_below']) && is_string($v['eol_affected_below'])
+                     && preg_match('/^\d+\.\d+$/', $v['eol_affected_below']) ) ? $v['eol_affected_below'] : '';
+            if ( ! $fixed && '' === $eol ) continue;
+
+            $cves = [];
+            if ( isset($v['cves']) && is_array($v['cves']) ) {
+                foreach ( $v['cves'] as $c ) {
+                    if ( is_string($c) && preg_match('/^CVE-\d{4}-\d{4,}$/', $c) ) $cves[] = $c;
+                }
+            }
+            $url = ( isset($v['url']) && is_string($v['url']) && 0 === strpos($v['url'], 'https://') ) ? esc_url_raw($v['url']) : '';
+
+            $out[] = [
+                'id'                 => isset($v['id']) && is_string($v['id']) ? sanitize_text_field($v['id']) : '',
+                'name'               => sanitize_text_field($v['name']),
+                'type'               => isset($v['type']) && is_string($v['type']) ? sanitize_text_field($v['type']) : '',
+                'cves'               => $cves,
+                'fixed'              => $fixed,
+                'eol_affected_below' => $eol,
+                'url'                => $url,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Return known vulnerabilities that affect the running PHP version.
+     * Matches the running PHP version against the vulnerability list (see get_php_vulnerability_db()).
+     */
+    private function get_php_vulnerabilities($php_version = null) {
+        $php_version = $php_version ? $php_version : PHP_VERSION;
+        if ( ! preg_match('/^(\d+)\.(\d+)\.(\d+)/', $php_version, $m) ) return [];
+        $clean  = $m[1] . '.' . $m[2] . '.' . $m[3];
+        $branch = $m[1] . '.' . $m[2];
+
+        $db = $this->get_php_vulnerability_db();
+
+        $found = [];
+        foreach ( $db as $v ) {
+            $fixed = isset($v['fixed']) && is_array($v['fixed']) ? $v['fixed'] : [];
+            if ( isset($fixed[$branch]) ) {
+                if ( version_compare($clean, $fixed[$branch], '<') ) {
+                    $v['fixed_in'] = $fixed[$branch];
+                    $found[] = $v;
+                }
+            } elseif ( ! empty($v['eol_affected_below']) && version_compare($branch, $v['eol_affected_below'], '<') ) {
+                $v['fixed_in'] = '';
+                $found[] = $v;
+            }
+        }
+        return $found;
+    }
+
+    /**
+     * Short red notice shown when the running PHP version has a known vulnerability.
+     */
+    private function render_php_vulnerability_notice() {
+        $vulns = $this->get_php_vulnerabilities();
+        if ( empty($vulns) ) return;
+
+        $php = preg_match('/^\d+\.\d+\.\d+/', PHP_VERSION, $mm) ? $mm[0] : PHP_VERSION;
+
+        // End-of-life branch = at least one listed vulnerability has no official fixed version for it.
+        $is_eol = false;
+        foreach ( $vulns as $v ) {
+            if ( empty($v['fixed_in']) ) { $is_eol = true; break; }
+        }
+
+        echo '<div style="margin:0 0 16px 0;padding:14px 18px;border-left:4px solid #d97706;background:#fffbeb;border-radius:4px;display:flex;align-items:flex-start;gap:12px;">
+            <span style="font-size:22px;line-height:1.3;">🔒</span>
+            <div>
+                <strong style="color:#92400e;font-size:14px;">' . esc_html__('PHP Security Notice', 'pcc') . '</strong>
+                <p style="margin:6px 0 0;color:#333;font-size:13px;line-height:1.6;">';
+
+        if ( $is_eol ) {
+            echo sprintf(
+                /* translators: %s: PHP version */
+                esc_html__('Your site is running PHP %s, which is no longer supported. The following known security issue affects this version, unless your hosting provider has already applied the patch:', 'pcc'),
+                '<strong>' . esc_html($php) . '</strong>'
+            );
+        } else {
+            echo sprintf(
+                /* translators: %s: PHP version */
+                esc_html__('Your site is running PHP %s. The following known security issue affects this version:', 'pcc'),
+                '<strong>' . esc_html($php) . '</strong>'
+            );
+        }
+        echo '</p><ul style="margin:6px 0 0 18px;list-style:disc;color:#333;font-size:13px;line-height:1.6;">';
+
+        $target = '';
+        foreach ( $vulns as $v ) {
+            $label = esc_html($v['name']);
+            if ( ! empty($v['url']) ) {
+                $label = '<a href="' . esc_url($v['url']) . '" target="_blank" rel="noopener">' . $label . '</a>';
+            }
+            $cves = ! empty($v['cves']) ? ' (' . esc_html(implode(', ', (array) $v['cves'])) . ')' : '';
+            $type = ! empty($v['type']) ? ' — ' . esc_html($v['type']) : '';
+            echo '<li><strong>' . $label . '</strong>' . $type . $cves . '</li>';
+            if ( ! empty($v['fixed_in']) && ( $target === '' || version_compare($v['fixed_in'], $target, '>') ) ) $target = $v['fixed_in']; // highest fix wins
+        }
+
+        echo '</ul><p style="margin:8px 0 0;color:#333;font-size:13px;line-height:1.6;">';
+
+        if ( $is_eol ) {
+            echo esc_html__('What to do: ask your hosting provider for the PHP security patch, or update your website to the latest supported PHP version (8.3 or newer). This is usually a quick change in your hosting panel. Check the compatibility results on this page first so your plugins keep working.', 'pcc');
+        } else {
+            $update_to = $target !== ''
+                ? sprintf(esc_html__('PHP %s or newer', 'pcc'), esc_html($target))
+                : esc_html__('the latest supported PHP version', 'pcc');
+            echo sprintf(
+                esc_html__('What to do: update to %s, or ask your hosting provider to apply the PHP security patch. This is usually a quick change in your hosting panel. If your host has already told you it is fixed, you can ignore this notice, as some hosts patch PHP without changing the version number.', 'pcc'),
+                '<strong>' . $update_to . '</strong>'
+            );
+        }
+        echo '</p></div></div>';
     }
 
     private function get_environment_stats($is_network) {
